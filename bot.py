@@ -9,6 +9,7 @@ from aiogram import Bot, Dispatcher, F, Router
 from aiogram.filters import Command
 from aiogram.types import (
     CallbackQuery,
+    FSInputFile,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     Message,
@@ -20,6 +21,26 @@ logger = logging.getLogger(__name__)
 BOT_TOKEN  = os.getenv("BOT_TOKEN", "")
 CHANNEL_ID = os.getenv("CHANNEL_ID", "")   # masalan: @mening_kanalim
 ADMIN_ID   = int(os.getenv("ADMIN_ID", "0"))
+
+# ──────────────────────────────────────────────
+# UC NARXLAR RO'YXATI
+# ──────────────────────────────────────────────
+UC_PRICES_TEXT = (
+    "💎💎💎💎💎💎💎💎💎💎💎💎💎💎💎\n\n"
+    "🪙 <b>UC SOTILADI | PUBG Mobile | sdzABU</b>\n\n"
+    "💎💎💎💎💎💎💎💎💎💎💎💎💎💎💎\n\n"
+    "🪙  60 UC     ▸   <b>13 500 so'm</b>\n"
+    "🪙  325 UC    ▸   <b>62 000 so'm</b>\n"
+    "🪙  660 UC    ▸   <b>115 000 so'm</b>\n"
+    "🪙  1800 UC   ▸   <b>280 000 so'm</b>\n"
+    "🪙  3850 UC   ▸   <b>550 000 so'm</b>\n"
+    "🪙  8100 UC   ▸   <b>1 050 000 so'm</b>\n\n"
+    "💎💎💎💎💎💎💎💎💎💎💎💎💎💎💎\n\n"
+    "✅ Kafolat bor | ⚡ 5 daqiqada yetkaziladi\n"
+    "📩 Buyurtma: @WebDev999\n"
+    "📺 YouTube: youtube.com/@sdzABU\n\n"
+    "💎💎💎💎💎💎💎💎💎💎💎💎💎💎💎"
+)
 
 # ──────────────────────────────────────────────
 # DATABASE
@@ -39,7 +60,14 @@ def init_db():
                 credentials TEXT,
                 price       REAL,
                 tier        TEXT,
-                status      TEXT DEFAULT 'available'
+                status      TEXT DEFAULT 'available',
+                rank        TEXT DEFAULT '',
+                level       INTEGER DEFAULT 0,
+                skin_count  INTEGER DEFAULT 0,
+                season      INTEGER DEFAULT 0,
+                uc_balance  INTEGER DEFAULT 0,
+                server      TEXT DEFAULT '',
+                rp_level    INTEGER DEFAULT 0
             );
             CREATE TABLE IF NOT EXISTS given (
                 id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -55,6 +83,10 @@ def init_db():
             CREATE TABLE IF NOT EXISTS claimed_users (
                 user_id INTEGER PRIMARY KEY
             );
+            CREATE TABLE IF NOT EXISTS settings (
+                key   TEXT PRIMARY KEY,
+                value TEXT
+            );
         """)
 
 def load_accounts_from_json(path="pubg-accounts.json"):
@@ -69,13 +101,36 @@ def load_accounts_from_json(path="pubg-accounts.json"):
 
     rows = []
     for item in raw:
-        # faqat PUBG account struktura: [id, name, desc, creds, price, tier, status]
-        if len(item) >= 7 and isinstance(item[1], str) and "@" not in item[1]:
-            rows.append((item[1], item[2], item[3], item[4], item[5], item[6]))
+        # Yangi object format
+        if isinstance(item, dict):
+            rows.append((
+                item.get("name", ""),
+                item.get("description", ""),
+                item.get("credentials", ""),
+                item.get("price", 0),
+                item.get("tier", "Random"),
+                item.get("status", "available"),
+                item.get("rank", ""),
+                item.get("level", 0),
+                item.get("skin_count", 0),
+                item.get("season", 0),
+                item.get("uc_balance", 0),
+                item.get("server", ""),
+                item.get("rp_level", 0),
+            ))
+        # Eski array format (backward compat)
+        elif isinstance(item, list) and len(item) >= 7:
+            rows.append((
+                item[1], item[2], item[3], item[4], item[5], item[6],
+                "", 0, 0, 0, 0, "", 0
+            ))
 
     with get_conn() as conn:
         conn.executemany(
-            "INSERT INTO accounts (name,description,credentials,price,tier,status) VALUES (?,?,?,?,?,?)",
+            """INSERT INTO accounts
+               (name,description,credentials,price,tier,status,
+                rank,level,skin_count,season,uc_balance,server,rp_level)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             rows,
         )
     logger.info(f"{len(rows)} ta account DB ga yuklandi.")
@@ -137,6 +192,67 @@ def mark_milestone_done(milestone_id: int):
         )
 
 # ──────────────────────────────────────────────
+# RANK EMOJI HELPER
+# ──────────────────────────────────────────────
+def rank_emoji(rank: str) -> str:
+    r = rank.lower() if rank else ""
+    if "conqueror" in r:     return "👑"
+    if "ace dominator" in r: return "🔱"
+    if "ace master" in r:    return "⚜️"
+    if "ace" in r:           return "🏆"
+    if "crown" in r:         return "👸"
+    if "diamond" in r:       return "💎"
+    if "platinum" in r:      return "🥇"
+    if "gold" in r:          return "🥈"
+    if "silver" in r:        return "🥉"
+    if "bronze" in r:        return "🪙"
+    return "🎖️"
+
+def tier_emoji(tier: str) -> str:
+    t = tier.lower() if tier else ""
+    if "ultimate" in t:   return "🌟"
+    if "mythic" in t:     return "🔮"
+    if "collector" in t:  return "💫"
+    if "legendary" in t:  return "⭐"
+    if "elite" in t:      return "🏅"
+    if "premium" in t:    return "💠"
+    return "📦"
+
+# ──────────────────────────────────────────────
+# ACCOUNT TEXT FORMATTER
+# ──────────────────────────────────────────────
+def account_text(acc) -> str:
+    """Account haqida to'liq ma'lumot — emoji bilan."""
+    rank_val  = acc["rank"]  if acc["rank"]  else "N/A"
+    server    = acc["server"] if acc["server"] else "N/A"
+    creds     = acc["credentials"]
+    parts     = creds.split(":", 1) if creds else ["", ""]
+    email     = parts[0] if len(parts) > 0 else ""
+    password  = parts[1] if len(parts) > 1 else ""
+
+    return (
+        f"━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🎮 <b>{acc['name']}</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"📋 {acc['description']}\n\n"
+        f"{tier_emoji(acc['tier'])} Tier: <b>{acc['tier']}</b>\n"
+        f"💰 Narxi: <b>{acc['price']:,.0f} so'm</b>\n"
+        f"{rank_emoji(rank_val)} Rank: <b>{rank_val}</b>\n"
+        f"📊 Level: <b>{acc['level']}</b>\n"
+        f"🎨 Skinlar soni: <b>{acc['skin_count']}</b>\n"
+        f"🗓 Season: <b>S{acc['season']}</b>\n"
+        f"🪙 UC Balance: <b>{acc['uc_balance']:,}</b>\n"
+        f"🌍 Server: <b>{server}</b>\n"
+        f"🎫 RP Level: <b>{acc['rp_level']}</b>\n\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🔑 <b>Login ma'lumotlari:</b>\n"
+        f"📧 Email: <code>{email}</code>\n"
+        f"🔒 Parol: <code>{password}</code>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"⚠️ <i>Ushbu ma'lumotni hech kim bilan ulashmang!</i>"
+    )
+
+# ──────────────────────────────────────────────
 # HELPERS
 # ──────────────────────────────────────────────
 async def is_subscribed(bot: Bot, user_id: int) -> bool:
@@ -146,16 +262,6 @@ async def is_subscribed(bot: Bot, user_id: int) -> bool:
     except Exception:
         return False
 
-def account_text(acc) -> str:
-    return (
-        f"🎮 <b>{acc['name']}</b>\n"
-        f"📋 {acc['description']}\n"
-        f"🏅 Tier: <b>{acc['tier']}</b>\n"
-        f"💰 Narxi: <b>{acc['price']:,.0f} so'm</b>\n\n"
-        f"🔑 Login ma'lumotlari:\n<code>{acc['credentials']}</code>\n\n"
-        f"⚠️ Ushbu ma'lumotni hech kim bilan ulashmang!"
-    )
-
 # ──────────────────────────────────────────────
 # ROUTER
 # ──────────────────────────────────────────────
@@ -163,17 +269,32 @@ router = Router()
 
 @router.message(Command("start"))
 async def cmd_start(msg: Message, bot: Bot):
-    kb = InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text="📢 Kanalga obuna bo'lish", url=f"https://t.me/{CHANNEL_ID.lstrip('@')}"),
-        InlineKeyboardButton(text="✅ Tekshirish", callback_data="check_sub"),
-    ]])
+    total, available, _ = stats()
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="📢 Kanalga obuna bo'lish", url=f"https://t.me/{CHANNEL_ID.lstrip('@')}"),
+        ],
+        [
+            InlineKeyboardButton(text="✅ Tekshirish", callback_data="check_sub"),
+        ],
+        [
+            InlineKeyboardButton(text="🪙 UC Narxlari", callback_data="uc_prices"),
+            InlineKeyboardButton(text="📊 Statistika", callback_data="public_stats"),
+        ],
+    ])
     await msg.answer(
-        "🎮 <b>PUBG Account Giveaway Bot</b>\n\n"
-        "Bepul PUBG account olish uchun:\n"
-        "1️⃣ Kanalga obuna bo'l\n"
-        "2️⃣ «Tekshirish» tugmasini bos\n"
-        "3️⃣ Accountni ol! 🎁\n\n"
-        f"📢 Kanal: {CHANNEL_ID}",
+        f"━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🎮 <b>PUBG Account Giveaway Bot</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"🎁 Bepul PUBG account olish uchun:\n\n"
+        f"1️⃣ Kanalga obuna bo'l\n"
+        f"2️⃣ «✅ Tekshirish» tugmasini bos\n"
+        f"3️⃣ Accountni ol va o'yna!\n\n"
+        f"📦 Jami accountlar: <b>{total:,}</b>\n"
+        f"✅ Hali mavjud: <b>{available:,}</b>\n\n"
+        f"📢 Kanal: {CHANNEL_ID}\n"
+        f"📺 YouTube: youtube.com/@sdzABU\n"
+        f"━━━━━━━━━━━━━━━━━━━━━",
         reply_markup=kb,
         parse_mode="HTML",
     )
@@ -208,6 +329,35 @@ async def cb_check_sub(call: CallbackQuery, bot: Bot):
     )
     await call.answer("✅ Account yuborildi! DM ni tekshiring.", show_alert=True)
 
+@router.callback_query(F.data == "uc_prices")
+async def cb_uc_prices(call: CallbackQuery):
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="📩 Buyurtma berish", url="https://t.me/WebDev999"),
+    ]])
+    uc_img = FSInputFile("uc_coin.png")
+    await call.message.answer_photo(
+        photo=uc_img,
+        caption=UC_PRICES_TEXT,
+        reply_markup=kb,
+        parse_mode="HTML",
+    )
+    await call.answer()
+
+@router.callback_query(F.data == "public_stats")
+async def cb_public_stats(call: CallbackQuery):
+    total, available, given_cnt = stats()
+    await call.message.answer(
+        f"━━━━━━━━━━━━━━━━━━━━━\n"
+        f"📊 <b>Bot Statistikasi</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"📦 Jami accountlar: <b>{total:,}</b>\n"
+        f"✅ Mavjud: <b>{available:,}</b>\n"
+        f"🎁 Berilgan: <b>{given_cnt:,}</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━",
+        parse_mode="HTML",
+    )
+    await call.answer()
+
 # ──────────────────────────────────────────────
 # ADMIN COMMANDS
 # ──────────────────────────────────────────────
@@ -224,10 +374,13 @@ def admin_only(func):
 async def cmd_stats(msg: Message, **_):
     total, available, given_cnt = stats()
     await msg.answer(
-        f"📊 <b>Statistika</b>\n\n"
-        f"🗃 Jami accountlar: <b>{total}</b>\n"
-        f"✅ Mavjud: <b>{available}</b>\n"
-        f"🎁 Berilgan: <b>{given_cnt}</b>",
+        f"━━━━━━━━━━━━━━━━━━━━━\n"
+        f"📊 <b>Admin Statistika</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"📦 Jami accountlar: <b>{total:,}</b>\n"
+        f"✅ Mavjud: <b>{available:,}</b>\n"
+        f"🎁 Berilgan: <b>{given_cnt:,}</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━",
         parse_mode="HTML",
     )
 
@@ -249,6 +402,13 @@ async def cmd_send_promo(msg: Message, bot: Bot, **_):
     await send_promo(bot)
     await msg.answer("✅ Promo post kanalga yuborildi!")
 
+@router.message(Command("senduc"))
+@admin_only
+async def cmd_send_uc(msg: Message, bot: Bot, **_):
+    """Kanalga UC narxlarini qo'lda yuboradi."""
+    await send_uc_post(bot)
+    await msg.answer("✅ UC narxlar kanalga yuborildi!")
+
 @router.message(Command("setpromo"))
 @admin_only
 async def cmd_set_promo(msg: Message, **_):
@@ -259,7 +419,6 @@ async def cmd_set_promo(msg: Message, **_):
         return
     hours = int(parts[1])
     with get_conn() as conn:
-        conn.execute("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)")
         conn.execute("INSERT OR REPLACE INTO settings VALUES ('promo_interval', ?)", (str(hours),))
     await msg.answer(f"✅ Promo har <b>{hours}</b> soatda avtomatik yuboriladi.", parse_mode="HTML")
 
@@ -281,6 +440,24 @@ async def cmd_give_manual(msg: Message, **_):
         f"✅ Account berildi (user {uid}):\n\n{account_text(acc)}", parse_mode="HTML"
     )
 
+@router.message(Command("help"))
+@admin_only
+async def cmd_help(msg: Message, **_):
+    await msg.answer(
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        "🛠 <b>Admin Buyruqlar</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "/stats — Statistikani ko'rish\n"
+        "/sendpromo — Promo post yuborish\n"
+        "/senduc — UC narxlarni yuborish\n"
+        "/setpromo 6 — Auto promo interval\n"
+        "/addmilestone 1000 — Milestone\n"
+        "/giveaccount 12345 — Qo'lda berish\n"
+        "/help — Shu yordam\n"
+        "━━━━━━━━━━━━━━━━━━━━━",
+        parse_mode="HTML",
+    )
+
 # ──────────────────────────────────────────────
 # PROMO POST
 # ──────────────────────────────────────────────
@@ -300,34 +477,73 @@ async def send_promo(bot: Bot):
 
     await bot.send_message(
         CHANNEL_ID,
-        f"🔥 <b>PUBG BEPUL ACCOUNT GIVEAWAY!</b>\n\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🔥 <b>PUBG BEPUL ACCOUNT GIVEAWAY!</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n\n"
         f"👥 Kanal obunachilari: <b>{count:,}</b>\n"
-        f"🎁 Berilgan accountlar: <b>{given_cnt}</b>\n"
-        f"✅ Hali mavjud: <b>{available}</b> ta\n\n"
-        f"━━━━━━━━━━━━━━━\n"
-        f"🎮 <b>Qanday olish mumkin?</b>\n"
+        f"🎁 Berilgan accountlar: <b>{given_cnt:,}</b>\n"
+        f"✅ Hali mavjud: <b>{available:,}</b> ta\n\n"
+        f"🎮 <b>Qanday olish mumkin?</b>\n\n"
         f"1️⃣ Kanalga obuna bo'l\n"
         f"2️⃣ Pastdagi tugmani bos\n"
         f"3️⃣ Accountni ol va o'yna!\n\n"
-        f"⚡️ Tez bo'l — accountlar cheklangan!\n"
-        f"🔔 Yangi giveaway lar uchun kanalda qol!",
+        f"⚡ Tez bo'l — accountlar cheklangan!\n"
+        f"🔔 Yangi giveaway lar uchun kanalda qol!\n"
+        f"━━━━━━━━━━━━━━━━━━━━━",
         reply_markup=kb,
         parse_mode="HTML",
     )
+
+# ──────────────────────────────────────────────
+# UC POST (har 24 soatda avtomatik)
+# ──────────────────────────────────────────────
+async def send_uc_post(bot: Bot):
+    """Kanalga UC narxlarini rasm bilan yuboradi."""
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="📩 Buyurtma berish", url="https://t.me/WebDev999"),
+        ],
+        [
+            InlineKeyboardButton(
+                text="🎮 Bepul account olish",
+                url=f"https://t.me/{(await bot.get_me()).username}?start=uc"
+            ),
+        ],
+    ])
+
+    uc_img = FSInputFile("uc_coin.png")
+    await bot.send_photo(
+        CHANNEL_ID,
+        photo=uc_img,
+        caption=UC_PRICES_TEXT,
+        reply_markup=kb,
+        parse_mode="HTML",
+    )
+
+async def uc_auto_scheduler(bot: Bot):
+    """Har 24 soatda UC narxlarini kanalga avtomatik yuboradi."""
+    while True:
+        try:
+            await send_uc_post(bot)
+            logger.info("UC narxlar kanalga yuborildi (avtomatik 24h)")
+        except Exception as e:
+            logger.error(f"UC auto post xatosi: {e}")
+        # 24 soat kutish
+        await asyncio.sleep(24 * 3600)
 
 async def auto_promo_scheduler(bot: Bot):
     """Sozlangan intervalda avtomatik promo yuboradi."""
     while True:
         try:
             with get_conn() as conn:
-                conn.execute("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)")
                 row = conn.execute("SELECT value FROM settings WHERE key='promo_interval'").fetchone()
             if row:
                 hours = int(row[0])
                 await send_promo(bot)
+                logger.info(f"Promo kanalga yuborildi (avtomatik {hours}h)")
                 await asyncio.sleep(hours * 3600)
             else:
-                await asyncio.sleep(300)  # interval yo'q — 5 daqiqada qayta tekshir
+                await asyncio.sleep(300)
         except Exception as e:
             logger.error(f"Auto promo xatosi: {e}")
             await asyncio.sleep(300)
@@ -339,7 +555,6 @@ async def milestone_checker(bot: Bot):
     """Har 10 daqiqada kanalning obunachi sonini tekshiradi."""
     while True:
         try:
-            chat = await bot.get_chat(CHANNEL_ID)
             count = await bot.get_chat_member_count(CHANNEL_ID)
             pending = get_pending_milestones(count)
 
@@ -351,16 +566,19 @@ async def milestone_checker(bot: Bot):
                 mark_milestone_done(ms["id"])
                 await bot.send_message(
                     CHANNEL_ID,
-                    f"🎊 <b>{ms['target']:,} obunachi!</b> Sog' bo'ling!\n\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"🎊 <b>{ms['target']:,} obunachi!</b> Tabriklaymiz!\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━\n\n"
                     f"🎁 Giveaway account:\n{account_text(acc)}\n\n"
-                    f"🔔 Ko'proq accountlar uchun kanalda qoling!",
+                    f"🔔 Ko'proq accountlar uchun kanalda qoling!\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━",
                     parse_mode="HTML",
                 )
                 logger.info(f"Milestone {ms['target']} triggered, account #{acc['id']} posted.")
         except Exception as e:
             logger.error(f"Milestone checker xatosi: {e}")
 
-        await asyncio.sleep(600)  # 10 daqiqa
+        await asyncio.sleep(600)
 
 # ──────────────────────────────────────────────
 # MAIN
@@ -378,6 +596,7 @@ async def main():
 
     asyncio.create_task(milestone_checker(bot))
     asyncio.create_task(auto_promo_scheduler(bot))
+    asyncio.create_task(uc_auto_scheduler(bot))
 
     logger.info("Bot ishga tushdi ✅")
     await dp.start_polling(bot)
