@@ -480,13 +480,13 @@ async def cmd_help(msg: Message, **_):
 @router.message(Command("sendpayment"))
 @admin_only
 async def cmd_send_payment(msg: Message, bot: Bot, **_):
-    """Kanalga to'lov ma'lumotlarini 1 marotaba tashlaydi."""
+    """Guruhga to'lov ma'lumotlarini 1 marotaba tashlaydi."""
     await bot.send_message(
-        CHANNEL_ID,
+        "@sdzAbuPM_UC",
         PAYMENT_TEXT,
         parse_mode="HTML"
     )
-    await msg.answer("✅ To'lov ma'lumotlari kanalga yuborildi!")
+    await msg.answer("✅ To'lov ma'lumotlari @sdzAbuPM_UC guruhiga yuborildi!")
 
 # ──────────────────────────────────────────────
 # PROMO POST
