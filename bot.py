@@ -3,7 +3,9 @@ import json
 import logging
 import os
 import sqlite3
-from datetime import datetime
+import time
+import aiohttp
+from datetime import datetime, timedelta
 
 from aiogram import Bot, Dispatcher, F, Router
 from aiogram.filters import Command
@@ -21,6 +23,7 @@ logger = logging.getLogger(__name__)
 BOT_TOKEN  = os.getenv("BOT_TOKEN", "")
 CHANNEL_ID = os.getenv("CHANNEL_ID", "")   # masalan: @mening_kanalim
 ADMIN_ID   = int(os.getenv("ADMIN_ID", "0"))
+OPENROUTER_KEY = os.getenv("OPENROUTER_KEY", "your_openrouter_api_key")
 
 # ──────────────────────────────────────────────
 # UC NARXLAR RO'YXATI
@@ -109,6 +112,13 @@ def init_db():
                 invites_count INTEGER DEFAULT 0
             );
         """)
+        try:
+            conn.execute("ALTER TABLE users ADD COLUMN points INTEGER DEFAULT 0")
+            conn.execute("ALTER TABLE users ADD COLUMN streak INTEGER DEFAULT 0")
+            conn.execute("ALTER TABLE users ADD COLUMN last_daily TEXT")
+            conn.execute("ALTER TABLE users ADD COLUMN lucky_spin_at TEXT")
+        except sqlite3.OperationalError:
+            pass # Already exists
 
 def get_user(user_id: int):
     with get_conn() as conn:
@@ -120,7 +130,25 @@ def create_user(user_id: int, referrer_id: int = None):
 
 def add_invite(user_id: int):
     with get_conn() as conn:
-        conn.execute("UPDATE users SET invites_count = invites_count + 1 WHERE user_id=?", (user_id,))
+        conn.execute("UPDATE users SET invites_count = invites_count + 1, points = points + 50 WHERE user_id=?", (user_id,))
+
+def check_daily(user_id: int):
+    user = get_user(user_id)
+    if not user: return False, 0
+    now = datetime.now()
+    if not user["last_daily"]:
+        return True, 1
+    last_d = datetime.fromisoformat(user["last_daily"])
+    if now.date() > last_d.date():
+        if now.date() == last_d.date() + timedelta(days=1):
+            return True, user["streak"] + 1
+        return True, 1
+    return False, user["streak"]
+
+def claim_daily(user_id: int, new_streak: int, points: int):
+    now = datetime.now().isoformat()
+    with get_conn() as conn:
+        conn.execute("UPDATE users SET last_daily=?, streak=?, points=points+? WHERE user_id=?", (now, new_streak, points, user_id))
 
 def load_accounts_from_json(path="pubg-accounts.json"):
     """JSON fayldan accountlarni DB ga bir marta yuklaydi."""
@@ -190,6 +218,22 @@ def has_claimed(user_id: int) -> bool:
             "SELECT 1 FROM claimed_users WHERE user_id=?", (user_id,)
         ).fetchone()
     return r is not None
+
+def set_banned(user_id: int):
+    with get_conn() as conn:
+        conn.execute("CREATE TABLE IF NOT EXISTS banned_users (user_id INTEGER PRIMARY KEY)")
+        conn.execute("INSERT OR IGNORE INTO banned_users (user_id) VALUES (?)", (user_id,))
+
+def remove_banned(user_id: int):
+    with get_conn() as conn:
+        conn.execute("CREATE TABLE IF NOT EXISTS banned_users (user_id INTEGER PRIMARY KEY)")
+        conn.execute("DELETE FROM banned_users WHERE user_id=?", (user_id,))
+
+def is_banned(user_id: int) -> bool:
+    with get_conn() as conn:
+        conn.execute("CREATE TABLE IF NOT EXISTS banned_users (user_id INTEGER PRIMARY KEY)")
+        row = conn.execute("SELECT 1 FROM banned_users WHERE user_id=?", (user_id,)).fetchone()
+        return row is not None
 
 def set_claimed(user_id: int):
     with get_conn() as conn:
@@ -303,6 +347,9 @@ router = Router()
 @router.message(Command("start"))
 async def cmd_start(msg: Message, bot: Bot):
     user_id = msg.from_user.id
+    if is_banned(user_id):
+        return
+        
     parts = msg.text.split()
     referrer_id = None
     if len(parts) > 1 and parts[1].isdigit():
@@ -321,7 +368,8 @@ async def cmd_start(msg: Message, bot: Bot):
             InlineKeyboardButton(text="✅ Tekshirish", callback_data="check_sub"),
         ],
         [
-            InlineKeyboardButton(text="🔗 Do'stlarni taklif qilish (Qo'shimcha AKK)", callback_data="my_referrals"),
+            InlineKeyboardButton(text="🔗 Do'stlarni taklif (Qo'shimcha AKK)", callback_data="my_referrals"),
+            InlineKeyboardButton(text="👤 Profilim", callback_data="my_profile"),
         ],
         [
             InlineKeyboardButton(text="🪙 UC Narxlari", callback_data="uc_prices"),
@@ -336,6 +384,12 @@ async def cmd_start(msg: Message, bot: Bot):
         f"1️⃣ Kanalga obuna bo'l\n"
         f"2️⃣ «✅ Tekshirish» tugmasini bos\n"
         f"3️⃣ Accountni ol va o'yna!\n\n"
+        f"🌟 <b>Qo'shimcha:</b>\n"
+        f"🎁 /daily — Kunlik bonus ball\n"
+        f"🎰 /spin — Omad g'ildiragi\n"
+        f"🛒 /shop — Ballar do'koni\n"
+        f"🏆 /leaderboard — Top reyting\n"
+        f"🤖 /ai savol — AI bilan suhbat\n\n"
         f"📦 Jami accountlar: <b>{total:,}</b>\n"
         f"✅ Hali mavjud: <b>{available:,}</b>\n\n"
         f"📢 Kanal: {CHANNEL_ID}\n"
@@ -474,6 +528,160 @@ async def cb_public_stats(call: CallbackQuery):
     )
     await call.answer()
 
+@router.callback_query(F.data == "my_profile")
+async def cb_profile(call: CallbackQuery):
+    user_id = call.from_user.id
+    user = get_user(user_id)
+    if not user:
+        create_user(user_id)
+        user = get_user(user_id)
+        
+    pts = user['points'] if user and 'points' in user.keys() else 0
+    streak = user['streak'] if user and 'streak' in user.keys() else 0
+    invites = user['invites_count'] if user and 'invites_count' in user.keys() else 0
+    
+    await call.message.answer(
+        f"━━━━━━━━━━━━━━━━━━━━━\n"
+        f"👤 <b>SIZNING PROFILINGIZ</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"🆔 ID: <code>{user_id}</code>\n"
+        f"💰 Ballar: <b>{pts}</b>\n"
+        f"🔥 Kunlik ketma-ketlik: <b>{streak} kun</b>\n"
+        f"👥 Takliflar: <b>{invites} ta</b>\n\n"
+        f"<i>Ball yig'ish uchun /daily yoki /spin qiling!</i>",
+        parse_mode="HTML"
+    )
+    await call.answer()
+
+@router.message(Command("daily"))
+async def cmd_daily(msg: Message, **_):
+    user_id = msg.from_user.id
+    user = get_user(user_id)
+    if not user: create_user(user_id)
+    can_claim, new_streak = check_daily(user_id)
+    
+    if not can_claim:
+        await msg.answer("❌ Siz bugungi bonusni oldingiz!\n⏳ Ertaga yana urinib ko'ring.")
+        return
+        
+    points_won = 10 + (new_streak * 2)
+    claim_daily(user_id, new_streak, points_won)
+    
+    await msg.answer(
+        f"🎉 <b>Kunlik bonus olingandi!</b>\n\n"
+        f"💰 Mukofot: <b>+{points_won} ball</b>\n"
+        f"🔥 Ketma-ketlik: <b>{new_streak} kun</b>\n\n"
+        f"<i>Ertaga ham kiring va ko'proq ball oling!</i>",
+        parse_mode="HTML"
+    )
+
+import random
+@router.message(Command("spin"))
+async def cmd_spin(msg: Message, **_):
+    user_id = msg.from_user.id
+    user = get_user(user_id)
+    if not user: create_user(user_id); user = get_user(user_id)
+    now = datetime.now()
+    
+    if user and user["lucky_spin_at"]:
+        last_s = datetime.fromisoformat(user["lucky_spin_at"])
+        if now < last_s + timedelta(hours=12):
+            diff = (last_s + timedelta(hours=12)) - now
+            h, rem = divmod(diff.seconds, 3600)
+            m, _ = divmod(rem, 60)
+            await msg.answer(f"⏳ Siz aylantirgansiz! Keyingi urinish: <b>{h} soat {m} min</b> dan so'ng.", parse_mode="HTML")
+            return
+            
+    with get_conn() as conn:
+        conn.execute("UPDATE users SET lucky_spin_at=? WHERE user_id=?", (now.isoformat(), user_id))
+        
+    wait_msg = await msg.answer("🎰 <i>G'ildirak aylanmoqda...</i>", parse_mode="HTML")
+    await asyncio.sleep(1)
+    
+    chance = random.random()
+    if chance < 0.05:
+        acc = next_available_account()
+        if acc:
+            mark_given(acc["id"], user_id)
+            await wait_msg.edit_text(f"🎉 <b>JACKPOT! AKKAUNT YUTDINGIZ!</b>\n\n{account_text(acc)}", parse_mode="HTML")
+        else:
+            with get_conn() as conn: conn.execute("UPDATE users SET points=points+500 WHERE user_id=?", (user_id,))
+            await wait_msg.edit_text("🎰 Akkauntlar qolmagan, kompensatsiya: <b>+500 ball!</b>", parse_mode="HTML")
+    elif chance < 0.40:
+        pts = random.choice([10, 20, 50, 100])
+        with get_conn() as conn: conn.execute("UPDATE users SET points=points+? WHERE user_id=?", (pts, user_id))
+        await wait_msg.edit_text(f"🎁 Tabriklaymiz, siz <b>{pts} ball</b> yutib oldingiz!", parse_mode="HTML")
+    else:
+        await wait_msg.edit_text("😔 Afsuski yutmadingiz. 12 soatdan keyin yana urining!", parse_mode="HTML")
+
+@router.message(Command("leaderboard"))
+async def cmd_leaderboard(msg: Message, **_):
+    with get_conn() as conn:
+        rows = conn.execute("SELECT user_id, points FROM users WHERE points > 0 ORDER BY points DESC LIMIT 10").fetchall()
+        
+    if not rows:
+        await msg.answer("📊 Reyting hozircha bo'sh.")
+        return
+        
+    text = "━━━━━━━━━━━━━━━━━━━━━\n🏆 <b>TOP 10 BALL YIG'GANLAR</b>\n━━━━━━━━━━━━━━━━━━━━━\n\n"
+    medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"]
+    for i, row in enumerate(rows):
+        text += f"{medals[i]} <code>{row['user_id']}</code> — <b>{row['points']} ball</b>\n"
+    text += "\n<i>O'z o'rningizni ko'tarish uchun /daily va /spin qiling!</i>\n━━━━━━━━━━━━━━━━━━━━━"
+    await msg.answer(text, parse_mode="HTML")
+
+@router.message(Command("shop"))
+async def cmd_shop(msg: Message, **_):
+    user_id = msg.from_user.id
+    user = get_user(user_id)
+    if not user: create_user(user_id); user = get_user(user_id)
+    
+    pts = user['points'] if user and 'points' in user.keys() else 0
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🎁 Random Akkaunt (1500 ball)", callback_data="buy_account_1500")],
+        [InlineKeyboardButton(text="💎 UC Skidka -20% (5000 ball)", callback_data="buy_uc_5000")],
+    ])
+    await msg.answer(
+        f"━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🛒 <b>BALLAR DO'KONI</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"💰 Sizning balingiz: <b>{pts} ball</b>\n\n"
+        f"Pastdagi tovarlardan xarid qilishingiz mumkin:",
+        reply_markup=kb,
+        parse_mode="HTML"
+    )
+
+@router.callback_query(F.data.startswith("buy_"))
+async def cb_buy(call: CallbackQuery, bot: Bot):
+    user_id = call.from_user.id
+    user = get_user(user_id)
+    pts = user['points'] if user and 'points' in user.keys() else 0
+    
+    item = call.data
+    price = 0
+    if item == "buy_account_1500": price = 1500
+    elif item == "buy_uc_5000": price = 5000
+    
+    if pts < price:
+        await call.answer("❌ Balingiz yetarli emas! /daily yoki qiling.", show_alert=True)
+        return
+        
+    if item == "buy_account_1500":
+        acc = next_available_account()
+        if not acc:
+            await call.answer("Oluvchi akkauntlar qolmagan, keyinroq urining.", show_alert=True)
+            return
+        mark_given(acc["id"], user_id)
+        with get_conn() as conn: conn.execute("UPDATE users SET points=points-? WHERE user_id=?", (price, user_id))
+        await call.message.answer(f"🎉 <b>Xarid muvaffaqiyatli!</b> Siz Akkaunt oldingiz:\n\n{account_text(acc)}", parse_mode="HTML")
+        await call.answer("Xarid qilindi!", show_alert=True)
+        
+    elif item == "buy_uc_5000":
+        with get_conn() as conn: conn.execute("UPDATE users SET points=points-? WHERE user_id=?", (price, user_id))
+        await call.message.answer("🎉 <b>Xarid muvaffaqiyatli!</b>\n\nSizga -20% UC chegirma berildi. Kun oxirigacha Adminga murojaat qiling va IDingizni ko'rsating: @WebDev999", parse_mode="HTML")
+        await call.answer("Xarid qilindi!", show_alert=True)
+
+
 # ──────────────────────────────────────────────
 # ADMIN COMMANDS
 # ──────────────────────────────────────────────
@@ -549,23 +757,38 @@ async def cmd_set_promo(msg: Message, **_):
         conn.execute("INSERT OR REPLACE INTO settings VALUES ('promo_interval', ?)", (str(hours),))
     await msg.answer(f"✅ Promo har <b>{hours}</b> soatda avtomatik yuboriladi.", parse_mode="HTML")
 
-@router.message(Command("giveaccount"))
+@router.message(Command("give"))
 @admin_only
 async def cmd_give_manual(msg: Message, **_):
-    """Admin qo'lda account beradi: /giveaccount <user_id>"""
+    """Admin joriy chatga M ta account beradi: /give 5"""
     parts = msg.text.split()
-    if len(parts) < 2:
-        await msg.answer("❗ Ishlatish: /giveaccount <user_id>")
+    count = 1
+    if len(parts) > 1 and parts[1].isdigit():
+        count = int(parts[1])
+        
+    if count > 50: # prevent spam
+        count = 50
+        
+    given_accs = []
+    for _ in range(count):
+        acc = next_available_account()
+        if not acc:
+            break
+        mark_given(acc["id"], msg.chat.id)
+        given_accs.append(acc)
+        
+    if not given_accs:
+        await msg.answer("😔 Bo'sh accountlar qolmadi.")
         return
-    uid = int(parts[1])
-    acc = next_available_account()
-    if acc is None:
-        await msg.answer("😔 Accountlar tugadi.")
-        return
-    mark_given(acc["id"], uid)
-    await msg.answer(
-        f"✅ Account berildi (user {uid}):\n\n{account_text(acc)}", parse_mode="HTML"
-    )
+        
+    for acc in given_accs:
+        try:
+            await msg.answer(f"🎁 <b>GIVEAWAY ACCOUNT</b>! 👇\n\n{account_text(acc)}", parse_mode="HTML")
+            await asyncio.sleep(0.3)
+        except Exception:
+            pass
+            
+    await msg.reply(f"✅ Shu chatga jami {len(given_accs)} ta akkaunt tashlandi!")
 
 @router.message(Command("topreferrals"))
 @admin_only
@@ -598,12 +821,55 @@ async def cmd_help(msg: Message, **_):
         "/sendpayment — To'lov guruhga yuborish\n"
         "/setpromo 6 — Auto promo interval\n"
         "/addmilestone 1000 — Milestone\n"
-        "/giveaccount 12345 — Qo'lda berish\n"
+        "/give 5 — Shu chatga 5 ta akk tashlash\n"
         "/topreferrals — Top taklif qiluvchilar\n"
+        "/broadcast matn — Barchaga xabar\n"
+        "/ban ID va /unban ID\n"
         "/help — Shu yordam\n"
         "━━━━━━━━━━━━━━━━━━━━━",
         parse_mode="HTML",
     )
+
+@router.message(Command("broadcast"))
+@admin_only
+async def cmd_broadcast(msg: Message, bot: Bot, **_):
+    """Barchaga xabar /broadcast matn"""
+    text = msg.text.replace("/broadcast", "").strip()
+    if not text:
+        await msg.answer("❗ Matn yo'q.")
+        return
+        
+    with get_conn() as conn:
+        rows = conn.execute("SELECT user_id FROM users").fetchall()
+        
+    sent, failed = 0, 0
+    prompt = await msg.answer("⏳ Broadcast yuborilmoqda...")
+    for row in rows:
+        try:
+            await bot.send_message(row["user_id"], f"📢 <b>ADMIN XABARI</b>\n\n{text}", parse_mode="HTML")
+            sent += 1
+            await asyncio.sleep(0.05)
+        except:
+            failed += 1
+    await prompt.edit_text(f"✅ Yuborildi: {sent}\n❌ Xato: {failed}")
+
+@router.message(Command("ban"))
+@admin_only
+async def cmd_ban(msg: Message, **_):
+    parts = msg.text.split()
+    if len(parts) > 1 and parts[1].isdigit():
+        uid = int(parts[1])
+        set_banned(uid)
+        await msg.answer(f"✅ User {uid} bloklandi.")
+
+@router.message(Command("unban"))
+@admin_only
+async def cmd_unban(msg: Message, **_):
+    parts = msg.text.split()
+    if len(parts) > 1 and parts[1].isdigit():
+        uid = int(parts[1])
+        remove_banned(uid)
+        await msg.answer(f"✅ User {uid} blokdan chiqarildi.")
 
 # ──────────────────────────────────────────────
 # PROMO POST
@@ -640,6 +906,45 @@ async def send_promo(bot: Bot):
         reply_markup=kb,
         parse_mode="HTML",
     )
+
+# ──────────────────────────────────────────────
+# AI INTEGRATION (OpenRouter)
+# ──────────────────────────────────────────────
+async def get_ai_response(prompt: str) -> str:
+    url = "https://openrouter.ai/api/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {OPENROUTER_KEY}",
+        "Content-Type": "application/json"
+    }
+    data = {
+        "model": "meta-llama/llama-3-8b-instruct:free",
+        "messages": [
+            {"role": "system", "content": "Sen PUBG Mobile ekspertisan. Foydalanuvchilarga qisqa va aniq maslahat berasan. Boting nomi 'sdzABU AI'."},
+            {"role": "user", "content": prompt}
+        ]
+    }
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, headers=headers, json=data) as resp:
+                if resp.status == 200:
+                    res_json = await resp.json()
+                    return res_json["choices"][0]["message"]["content"]
+                else:
+                    return f"😔 API xatosi: {resp.status}"
+    except Exception as e:
+        logger.error(f"AI error: {e}")
+        return "😔 Tizim xatosi yuz berdi."
+
+@router.message(Command("ai"))
+async def cmd_ai(msg: Message, **_):
+    """AI bilan gaplashish"""
+    text = msg.text.replace("/ai", "").strip()
+    if not text:
+        await msg.answer("🤖 Menga savol yozing. Masalan:\n`/ai M416 uchun qaysi nishon (scope) yaxshi?`", parse_mode="Markdown")
+        return
+    wait_msg = await msg.answer("⏳ <i>O'ylayapman...</i>", parse_mode="HTML")
+    answer = await get_ai_response(text)
+    await wait_msg.edit_text(answer, parse_mode="Markdown")
 
 # ──────────────────────────────────────────────
 # UC POST (har 24 soatda avtomatik)
