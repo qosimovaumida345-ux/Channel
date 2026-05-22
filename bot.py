@@ -103,7 +103,24 @@ def init_db():
                 key   TEXT PRIMARY KEY,
                 value TEXT
             );
+            CREATE TABLE IF NOT EXISTS users (
+                user_id       INTEGER PRIMARY KEY,
+                referrer_id   INTEGER,
+                invites_count INTEGER DEFAULT 0
+            );
         """)
+
+def get_user(user_id: int):
+    with get_conn() as conn:
+        return conn.execute("SELECT * FROM users WHERE user_id=?", (user_id,)).fetchone()
+
+def create_user(user_id: int, referrer_id: int = None):
+    with get_conn() as conn:
+        conn.execute("INSERT OR IGNORE INTO users (user_id, referrer_id) VALUES (?, ?)", (user_id, referrer_id))
+
+def add_invite(user_id: int):
+    with get_conn() as conn:
+        conn.execute("UPDATE users SET invites_count = invites_count + 1 WHERE user_id=?", (user_id,))
 
 def load_accounts_from_json(path="pubg-accounts.json"):
     """JSON fayldan accountlarni DB ga bir marta yuklaydi."""
@@ -285,6 +302,16 @@ router = Router()
 
 @router.message(Command("start"))
 async def cmd_start(msg: Message, bot: Bot):
+    user_id = msg.from_user.id
+    parts = msg.text.split()
+    referrer_id = None
+    if len(parts) > 1 and parts[1].isdigit():
+        ref = int(parts[1])
+        if ref != user_id:
+            referrer_id = ref
+            
+    create_user(user_id, referrer_id)
+
     total, available, _ = stats()
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [
@@ -292,6 +319,9 @@ async def cmd_start(msg: Message, bot: Bot):
         ],
         [
             InlineKeyboardButton(text="✅ Tekshirish", callback_data="check_sub"),
+        ],
+        [
+            InlineKeyboardButton(text="🔗 Do'stlarni taklif qilish (Qo'shimcha AKK)", callback_data="my_referrals"),
         ],
         [
             InlineKeyboardButton(text="🪙 UC Narxlari", callback_data="uc_prices"),
@@ -339,11 +369,79 @@ async def cb_check_sub(call: CallbackQuery, bot: Bot):
     mark_given(acc["id"], user_id)
     set_claimed(user_id)
 
+    # REFEARRAL TEKSHIRUVI
+    user = get_user(user_id)
+    if user and user["referrer_id"]:
+        try:
+            r_id = user["referrer_id"]
+            add_invite(r_id)
+            r_data = get_user(r_id)
+            inv = r_data["invites_count"] if r_data else 0
+            if inv > 0 and inv % 15 == 0:
+                extra_acc = next_available_account()
+                if extra_acc:
+                    mark_given(extra_acc["id"], r_id)
+                    await bot.send_message(
+                        r_id,
+                        f"━━━━━━━━━━━━━━━━━━━━━\n"
+                        f"🎉 <b>TABRIKLAYMIZ!</b>\n"
+                        f"━━━━━━━━━━━━━━━━━━━━━\n\n"
+                        f"Sizning ssilkangiz orqali <b>{inv}</b> kishi bizga qo'shildi!\n"
+                        f"🏆 Mukofot sifatida sizga maxsus akkaunt berildi:\n\n"
+                        f"{account_text(extra_acc)}\n\n"
+                        f"🔗 Ko'proq do'stlaringizni taklif qiling — har 15 ta uchun yana akkaunt!",
+                        parse_mode="HTML"
+                    )
+            else:
+                qoldi = 15 - (inv % 15)
+                progress = '🟩' * (inv % 15) + '⬜' * qoldi
+                try:
+                    await bot.send_message(
+                        r_id,
+                        f"✅ Sizning ssilkangiz orqali yana 1 kishi qo'shildi!\n"
+                        f"👥 Jami takliflar: <b>{inv}</b>/15\n"
+                        f"{progress}\n"
+                        f"🎁 Keyingi mukofotga <b>{qoldi}</b> ta qoldi!",
+                        parse_mode="HTML"
+                    )
+                except Exception:
+                    pass
+        except Exception as e:
+            logger.error(f"Referral error: {e}")
+
     await call.message.answer(
         f"🎉 <b>Tabriklaymiz!</b> Sizga account berildi:\n\n{account_text(acc)}",
         parse_mode="HTML",
     )
     await call.answer("✅ Account yuborildi! DM ni tekshiring.", show_alert=True)
+
+@router.callback_query(F.data == "my_referrals")
+async def cb_referrals(call: CallbackQuery, bot: Bot):
+    user_id = call.from_user.id
+    user = get_user(user_id)
+    if not user:
+        create_user(user_id)
+        user = get_user(user_id)
+        
+    invites = user["invites_count"]
+    link = f"https://t.me/{(await bot.get_me()).username}?start={user_id}"
+    
+    await call.message.answer(
+        f"━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🔗 <b>SHAXSIY TAKLIF SSILKANGIZ</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"👉 <code>{link}</code>\n\n"
+        f"Ushbu ssilkani do'stlaringizga yuboring! Qachonki ular:\n"
+        f"1. Botga kirsa\n"
+        f"2. Kanalga obuna bo'lsa\n"
+        f"3. <b>Birinchi tasodifiy akkauntini olsa</b>\n\n"
+        f"Shundagina sizga 1 ta taklif yoziladi.\n"
+        f"🎁 <b>Har 15 ta shunday odam uchun sizga AVTOMATIK ravishda LICHKANGIZGA maxsus yopiq premium akkaunt yuboriladi!</b>\n\n"
+        f"👥 Hozircha taklif qilgan do'stlaringiz: <b>{invites} ta</b>\n"
+        f"📊 Keyingi akkaunt uchun qoldi: <b>{15 - (invites % 15)} ta</b>",
+        parse_mode="HTML"
+    )
+    await call.answer()
 
 @router.callback_query(F.data == "uc_prices")
 async def cb_uc_prices(call: CallbackQuery):
@@ -427,6 +525,17 @@ async def cmd_send_uc(msg: Message, bot: Bot, **_):
     await send_uc_post(bot)
     await msg.answer("✅ UC narxlar kanalga yuborildi!")
 
+@router.message(Command("sendpayment"))
+@admin_only
+async def cmd_send_payment(msg: Message, bot: Bot, **_):
+    """Guruhga to'lov ma'lumotlarini 1 marotaba tashlaydi."""
+    await bot.send_message(
+        "@sdzAbuPM_UC",
+        PAYMENT_TEXT,
+        parse_mode="HTML"
+    )
+    await msg.answer("✅ To'lov ma'lumotlari @sdzAbuPM_UC guruhiga yuborildi!")
+
 @router.message(Command("setpromo"))
 @admin_only
 async def cmd_set_promo(msg: Message, **_):
@@ -458,6 +567,24 @@ async def cmd_give_manual(msg: Message, **_):
         f"✅ Account berildi (user {uid}):\n\n{account_text(acc)}", parse_mode="HTML"
     )
 
+@router.message(Command("topreferrals"))
+@admin_only
+async def cmd_top_referrals(msg: Message, **_):
+    """Eng ko'p do'st taklif qilgan top 10 foydalanuvchilarni ko'rsatadi."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT user_id, invites_count FROM users WHERE invites_count > 0 ORDER BY invites_count DESC LIMIT 10"
+        ).fetchall()
+    if not rows:
+        await msg.answer("📊 Hali hech kim taklif qilmagan.")
+        return
+    text = "━━━━━━━━━━━━━━━━━━━━━\n🏆 <b>TOP 10 TAKLIF QILUVCHILAR</b>\n━━━━━━━━━━━━━━━━━━━━━\n\n"
+    medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"]
+    for i, row in enumerate(rows):
+        text += f"{medals[i]} <code>{row['user_id']}</code> — <b>{row['invites_count']}</b> ta taklif\n"
+    text += "\n━━━━━━━━━━━━━━━━━━━━━"
+    await msg.answer(text, parse_mode="HTML")
+
 @router.message(Command("help"))
 @admin_only
 async def cmd_help(msg: Message, **_):
@@ -468,25 +595,15 @@ async def cmd_help(msg: Message, **_):
         "/stats — Statistikani ko'rish\n"
         "/sendpromo — Promo post yuborish\n"
         "/senduc — UC narxlarni yuborish\n"
-        "/sendpayment — To'lov kanalga yuborish\n"
+        "/sendpayment — To'lov guruhga yuborish\n"
         "/setpromo 6 — Auto promo interval\n"
         "/addmilestone 1000 — Milestone\n"
         "/giveaccount 12345 — Qo'lda berish\n"
+        "/topreferrals — Top taklif qiluvchilar\n"
         "/help — Shu yordam\n"
         "━━━━━━━━━━━━━━━━━━━━━",
         parse_mode="HTML",
     )
-
-@router.message(Command("sendpayment"))
-@admin_only
-async def cmd_send_payment(msg: Message, bot: Bot, **_):
-    """Guruhga to'lov ma'lumotlarini 1 marotaba tashlaydi."""
-    await bot.send_message(
-        "@sdzAbuPM_UC",
-        PAYMENT_TEXT,
-        parse_mode="HTML"
-    )
-    await msg.answer("✅ To'lov ma'lumotlari @sdzAbuPM_UC guruhiga yuborildi!")
 
 # ──────────────────────────────────────────────
 # PROMO POST
