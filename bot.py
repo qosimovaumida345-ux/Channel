@@ -26,20 +26,25 @@ ADMIN_ID   = int(os.getenv("ADMIN_ID", "0"))
 # UC NARXLAR RO'YXATI
 # ──────────────────────────────────────────────
 UC_PRICES_TEXT = (
-    "💎💎💎💎💎💎💎💎💎💎💎💎💎💎💎\n\n"
-    "🪙 <b>UC SOTILADI | PUBG Mobile | sdzABU</b>\n\n"
-    "💎💎💎💎💎💎💎💎💎💎💎💎💎💎💎\n\n"
-    "🪙  60 UC     ▸   <b>13 500 so'm</b>\n"
-    "🪙  325 UC    ▸   <b>62 000 so'm</b>\n"
-    "🪙  660 UC    ▸   <b>115 000 so'm</b>\n"
-    "🪙  1800 UC   ▸   <b>280 000 so'm</b>\n"
-    "🪙  3850 UC   ▸   <b>550 000 so'm</b>\n"
-    "🪙  8100 UC   ▸   <b>1 050 000 so'm</b>\n\n"
-    "💎💎💎💎💎💎💎💎💎💎💎💎💎💎💎\n\n"
-    "✅ Kafolat bor | ⚡ 5 daqiqada yetkaziladi\n"
-    "📩 Buyurtma: @WebDev999\n"
-    "📺 YouTube: youtube.com/@sdzABU\n\n"
-    "💎💎💎💎💎💎💎💎💎💎💎💎💎💎💎"
+    "⚡️ sdzABU UC XIZMATI\n"
+    "⚡️ UC tushish vaqti 1-7 minut\n\n"
+    "\" ⚠️ <i>Diqqat suhbatni davom ettirish orqali\n"
+    "UC servis shartlariga rozilik bildirgan bo'lasiz</i> \"\n\n"
+    "💳 orqali\n\n"
+    "<tg-emoji emoji-id=\"5411181829627685641\">🪙</tg-emoji> 60 - 13.000 UZS\n"
+    "<tg-emoji emoji-id=\"5411181829627685641\">🪙</tg-emoji> 120 - 26.000 UZS\n"
+    "<tg-emoji emoji-id=\"5411181829627685641\">🪙</tg-emoji> 180 - 39.000 UZS\n"
+    "<tg-emoji emoji-id=\"5411181829627685641\">🪙</tg-emoji> 325 - 58.000 UZS\n"
+    "<tg-emoji emoji-id=\"5411181829627685641\">🪙</tg-emoji> 385 - 70.000 UZS 💳\n"
+    "<tg-emoji emoji-id=\"5411181829627685641\">🪙</tg-emoji> 660 - 112.000 UZS\n"
+    "<tg-emoji emoji-id=\"5411181829627685641\">🪙</tg-emoji> 720 - 125.000 UZS 💳\n"
+    "<tg-emoji emoji-id=\"5411181829627685641\">🪙</tg-emoji> 985 - 170.000 UZS\n"
+    "<tg-emoji emoji-id=\"5411181829627685641\">🪙</tg-emoji> 1320 - 224.000 UZS\n"
+    "<tg-emoji emoji-id=\"5411181829627685641\">🪙</tg-emoji> 1800 - 290.000 UZS\n"
+    "<tg-emoji emoji-id=\"5411181829627685641\">🪙</tg-emoji> 2125 - 350.000 UZS\n"
+    "<tg-emoji emoji-id=\"5411181829627685641\">🪙</tg-emoji> 3850 - 570.000 UZS\n"
+    "<tg-emoji emoji-id=\"5411181829627685641\">🪙</tg-emoji> 8100 - 1.120.000 UZS\n\n"
+    "Orginal UC admin lichkasi 👇"
 )
 
 # ──────────────────────────────────────────────
@@ -331,10 +336,12 @@ async def cb_check_sub(call: CallbackQuery, bot: Bot):
 
 @router.callback_query(F.data == "uc_prices")
 async def cb_uc_prices(call: CallbackQuery):
-    kb = InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text="📩 Buyurtma berish", url="https://t.me/WebDev999"),
-    ]])
-    uc_img = FSInputFile("uc_coin.png")
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🛒 UC SOTIB OLISH", url="https://t.me/WebDev999")],
+        [InlineKeyboardButton(text="🔰 AKK SOTIB OLISH", callback_data="check_sub")],
+        [InlineKeyboardButton(text="📜 TO'LOV VA QOIDALAR", callback_data="public_stats")],
+    ])
+    uc_img = FSInputFile("uc-banner.png")
     await call.message.answer_photo(
         photo=uc_img,
         caption=UC_PRICES_TEXT,
@@ -500,18 +507,12 @@ async def send_promo(bot: Bot):
 async def send_uc_post(bot: Bot):
     """Kanalga UC narxlarini rasm bilan yuboradi."""
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text="📩 Buyurtma berish", url="https://t.me/WebDev999"),
-        ],
-        [
-            InlineKeyboardButton(
-                text="🎮 Bepul account olish",
-                url=f"https://t.me/{(await bot.get_me()).username}?start=uc"
-            ),
-        ],
+        [InlineKeyboardButton(text="🛒 UC SOTIB OLISH", url="https://t.me/WebDev999")],
+        [InlineKeyboardButton(text="🔰 AKK SOTIB OLISH", url=f"https://t.me/{(await bot.get_me()).username}?start=giveaway")],
+        [InlineKeyboardButton(text="📜 TO'LOV VA QOIDALAR", url=f"https://t.me/{(await bot.get_me()).username}?start=stats")],
     ])
 
-    uc_img = FSInputFile("uc_coin.png")
+    uc_img = FSInputFile("uc-banner.png")
     await bot.send_photo(
         CHANNEL_ID,
         photo=uc_img,
