@@ -242,6 +242,27 @@ async def cmd_add_milestone(msg: Message, **_):
     add_milestone(target)
     await msg.answer(f"✅ Milestone qo'shildi: <b>{target:,}</b> obunachi", parse_mode="HTML")
 
+@router.message(Command("sendpromo"))
+@admin_only
+async def cmd_send_promo(msg: Message, bot: Bot, **_):
+    """Kanalga qo'lda promo post yuboradi."""
+    await send_promo(bot)
+    await msg.answer("✅ Promo post kanalga yuborildi!")
+
+@router.message(Command("setpromo"))
+@admin_only
+async def cmd_set_promo(msg: Message, **_):
+    """Auto promo intervalini soat bilan belgilaydi: /setpromo 6"""
+    parts = msg.text.split()
+    if len(parts) < 2 or not parts[1].isdigit():
+        await msg.answer("❗ Ishlatish: /setpromo 6  (har 6 soatda bir marta)")
+        return
+    hours = int(parts[1])
+    with get_conn() as conn:
+        conn.execute("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)")
+        conn.execute("INSERT OR REPLACE INTO settings VALUES ('promo_interval', ?)", (str(hours),))
+    await msg.answer(f"✅ Promo har <b>{hours}</b> soatda avtomatik yuboriladi.", parse_mode="HTML")
+
 @router.message(Command("giveaccount"))
 @admin_only
 async def cmd_give_manual(msg: Message, **_):
@@ -259,6 +280,57 @@ async def cmd_give_manual(msg: Message, **_):
     await msg.answer(
         f"✅ Account berildi (user {uid}):\n\n{account_text(acc)}", parse_mode="HTML"
     )
+
+# ──────────────────────────────────────────────
+# PROMO POST
+# ──────────────────────────────────────────────
+async def send_promo(bot: Bot):
+    _, available, given_cnt = stats()
+    try:
+        count = await bot.get_chat_member_count(CHANNEL_ID)
+    except Exception:
+        count = "?"
+
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(
+            text="🎮 Bepul account olish",
+            url=f"https://t.me/{(await bot.get_me()).username}?start=promo"
+        )
+    ]])
+
+    await bot.send_message(
+        CHANNEL_ID,
+        f"🔥 <b>PUBG BEPUL ACCOUNT GIVEAWAY!</b>\n\n"
+        f"👥 Kanal obunachilari: <b>{count:,}</b>\n"
+        f"🎁 Berilgan accountlar: <b>{given_cnt}</b>\n"
+        f"✅ Hali mavjud: <b>{available}</b> ta\n\n"
+        f"━━━━━━━━━━━━━━━\n"
+        f"🎮 <b>Qanday olish mumkin?</b>\n"
+        f"1️⃣ Kanalga obuna bo'l\n"
+        f"2️⃣ Pastdagi tugmani bos\n"
+        f"3️⃣ Accountni ol va o'yna!\n\n"
+        f"⚡️ Tez bo'l — accountlar cheklangan!\n"
+        f"🔔 Yangi giveaway lar uchun kanalda qol!",
+        reply_markup=kb,
+        parse_mode="HTML",
+    )
+
+async def auto_promo_scheduler(bot: Bot):
+    """Sozlangan intervalda avtomatik promo yuboradi."""
+    while True:
+        try:
+            with get_conn() as conn:
+                conn.execute("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)")
+                row = conn.execute("SELECT value FROM settings WHERE key='promo_interval'").fetchone()
+            if row:
+                hours = int(row[0])
+                await send_promo(bot)
+                await asyncio.sleep(hours * 3600)
+            else:
+                await asyncio.sleep(300)  # interval yo'q — 5 daqiqada qayta tekshir
+        except Exception as e:
+            logger.error(f"Auto promo xatosi: {e}")
+            await asyncio.sleep(300)
 
 # ──────────────────────────────────────────────
 # MILESTONE CHECKER (background task)
@@ -305,6 +377,7 @@ async def main():
     await start_webserver()
 
     asyncio.create_task(milestone_checker(bot))
+    asyncio.create_task(auto_promo_scheduler(bot))
 
     logger.info("Bot ishga tushdi ✅")
     await dp.start_polling(bot)
