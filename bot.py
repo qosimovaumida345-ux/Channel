@@ -47,6 +47,17 @@ UC_PRICES_TEXT = (
     "Orginal UC admin lichkasi 👇"
 )
 
+PAYMENT_TEXT = (
+    "━━━━━━━━━━━━━━━━━━━━━\n"
+    "💳 <b>TO'LOV KARTA MA'LUMOTLARI</b>\n"
+    "━━━━━━━━━━━━━━━━━━━━━\n\n"
+    "Quyidagi karta raqamiga to'lovni amalga oshiring va chekni (skrinshot) adminga yuboring:\n\n"
+    "💳 KARTA RAQAMI:\n"
+    "👉 <code>5614 6846 0556 8557</code> 👈\n\n"
+    "⚠️ <i>Diqqat: To'lov to'liq o'tganiga ishonch hosil qilgandan so'ng, tasdiqlovni admin @WebDev999 ga yuboring. Barcha xaridlarimiz 100% kafolatlangan!</i>\n"
+    "━━━━━━━━━━━━━━━━━━━━━"
+)
+
 # ──────────────────────────────────────────────
 # DATABASE
 # ──────────────────────────────────────────────
@@ -338,8 +349,8 @@ async def cb_check_sub(call: CallbackQuery, bot: Bot):
 async def cb_uc_prices(call: CallbackQuery):
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🛒 UC SOTIB OLISH", url="https://t.me/WebDev999")],
-        [InlineKeyboardButton(text="🔰 AKK SOTIB OLISH", callback_data="check_sub")],
-        [InlineKeyboardButton(text="📜 TO'LOV VA QOIDALAR", callback_data="public_stats")],
+        [InlineKeyboardButton(text="🔰 AKK SOTIB OLISH", url="https://t.me/sdzAbuPM_AkkSavdo")],
+        [InlineKeyboardButton(text="📜 TO'LOV VA QOIDALAR", url="https://t.me/sdzAbuPM_UC")],
     ])
     uc_img = FSInputFile("uc-banner.png")
     await call.message.answer_photo(
@@ -457,6 +468,7 @@ async def cmd_help(msg: Message, **_):
         "/stats — Statistikani ko'rish\n"
         "/sendpromo — Promo post yuborish\n"
         "/senduc — UC narxlarni yuborish\n"
+        "/sendpayment — To'lov kanalga yuborish\n"
         "/setpromo 6 — Auto promo interval\n"
         "/addmilestone 1000 — Milestone\n"
         "/giveaccount 12345 — Qo'lda berish\n"
@@ -464,6 +476,17 @@ async def cmd_help(msg: Message, **_):
         "━━━━━━━━━━━━━━━━━━━━━",
         parse_mode="HTML",
     )
+
+@router.message(Command("sendpayment"))
+@admin_only
+async def cmd_send_payment(msg: Message, bot: Bot, **_):
+    """Kanalga to'lov ma'lumotlarini 1 marotaba tashlaydi."""
+    await bot.send_message(
+        CHANNEL_ID,
+        PAYMENT_TEXT,
+        parse_mode="HTML"
+    )
+    await msg.answer("✅ To'lov ma'lumotlari kanalga yuborildi!")
 
 # ──────────────────────────────────────────────
 # PROMO POST
@@ -508,8 +531,8 @@ async def send_uc_post(bot: Bot):
     """Kanalga UC narxlarini rasm bilan yuboradi."""
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🛒 UC SOTIB OLISH", url="https://t.me/WebDev999")],
-        [InlineKeyboardButton(text="🔰 AKK SOTIB OLISH", url=f"https://t.me/{(await bot.get_me()).username}?start=giveaway")],
-        [InlineKeyboardButton(text="📜 TO'LOV VA QOIDALAR", url=f"https://t.me/{(await bot.get_me()).username}?start=stats")],
+        [InlineKeyboardButton(text="🔰 AKK SOTIB OLISH", url="https://t.me/sdzAbuPM_AkkSavdo")],
+        [InlineKeyboardButton(text="📜 TO'LOV VA QOIDALAR", url="https://t.me/sdzAbuPM_UC")],
     ])
 
     uc_img = FSInputFile("uc-banner.png")
