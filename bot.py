@@ -808,24 +808,52 @@ async def cmd_top_referrals(msg: Message, **_):
     text += "\n━━━━━━━━━━━━━━━━━━━━━"
     await msg.answer(text, parse_mode="HTML")
 
+@router.message(Command("commands"))
+async def cmd_commands(msg: Message, **_):
+    await msg.answer(
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        "📜 <b>BOT BUYRUQLARI</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "🎮 <b>Asosiy:</b>\n"
+        "/start — Botni ishga tushirish\n"
+        "/daily — Kunlik bonus ball olish\n"
+        "/spin — Omad g'ildiragi (12 soatda 1x)\n"
+        "/shop — Ballar do'koni\n"
+        "/leaderboard — Top reyting\n\n"
+        "🤖 <b>AI:</b>\n"
+        "/ai savol — AI dan maslahat olish\n\n"
+        "📊 <b>Ma'lumot:</b>\n"
+        "👤 Profilim — Ballar va streak ko'rish\n"
+        "📊 Statistika — Bot statistikasi\n"
+        "💰 UC Narxlar — UC narxlar ro'yxati\n"
+        "👥 Takliflarim — Referral ma'lumotlar\n"
+        "━━━━━━━━━━━━━━━━━━━━━",
+        parse_mode="HTML",
+    )
+
 @router.message(Command("help"))
 @admin_only
 async def cmd_help(msg: Message, **_):
     await msg.answer(
         "━━━━━━━━━━━━━━━━━━━━━\n"
-        "🛠 <b>Admin Buyruqlar</b>\n"
+        "🛠 <b>ADMIN BUYRUQLARI</b>\n"
         "━━━━━━━━━━━━━━━━━━━━━\n\n"
-        "/stats — Statistikani ko'rish\n"
-        "/sendpromo — Promo post yuborish\n"
-        "/senduc — UC narxlarni yuborish\n"
-        "/sendpayment — To'lov guruhga yuborish\n"
-        "/setpromo 6 — Auto promo interval\n"
-        "/addmilestone 1000 — Milestone\n"
+        "📊 <b>Statistika:</b>\n"
+        "/stats — Admin statistika\n"
+        "/topreferrals — Top taklif qiluvchilar\n\n"
+        "📢 <b>Post yuborish:</b>\n"
+        "/sendpromo — Promo post\n"
+        "/senduc — UC narxlar posti\n"
+        "/sendpayment — To'lov ma'lumoti\n"
+        "/setpromo 6 — Auto promo interval (soat)\n\n"
+        "🎁 <b>Giveaway:</b>\n"
         "/give 5 — Shu chatga 5 ta akk tashlash\n"
-        "/topreferrals — Top taklif qiluvchilar\n"
+        "/addmilestone 1000 — Milestone qo'shish\n\n"
+        "👥 <b>Foydalanuvchilar:</b>\n"
         "/broadcast matn — Barchaga xabar\n"
-        "/ban ID va /unban ID\n"
-        "/help — Shu yordam\n"
+        "/ban ID — Bloklash\n"
+        "/unban ID — Blokdan chiqarish\n\n"
+        "ℹ️ /commands — Barcha buyruqlar\n"
         "━━━━━━━━━━━━━━━━━━━━━",
         parse_mode="HTML",
     )
@@ -910,30 +938,43 @@ async def send_promo(bot: Bot):
 # ──────────────────────────────────────────────
 # AI INTEGRATION (OpenRouter)
 # ──────────────────────────────────────────────
+AI_MODELS = [
+    "openai/gpt-oss-20b:free",
+    "meta-llama/llama-3.3-70b-instruct:free",
+    "deepseek/deepseek-v4-flash:free",
+    "google/gemma-4-26b-a4b-it:free",
+]
+
 async def get_ai_response(prompt: str) -> str:
     url = "https://openrouter.ai/api/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {OPENROUTER_KEY}",
         "Content-Type": "application/json"
     }
-    data = {
-        "model": "meta-llama/llama-3-8b-instruct:free",
-        "messages": [
-            {"role": "system", "content": "Sen PUBG Mobile ekspertisan. Foydalanuvchilarga qisqa va aniq maslahat berasan. Boting nomi 'sdzABU AI'."},
-            {"role": "user", "content": prompt}
-        ]
-    }
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(url, headers=headers, json=data) as resp:
-                if resp.status == 200:
-                    res_json = await resp.json()
-                    return res_json["choices"][0]["message"]["content"]
-                else:
-                    return f"😔 API xatosi: {resp.status}"
-    except Exception as e:
-        logger.error(f"AI error: {e}")
-        return "😔 Tizim xatosi yuz berdi."
+    
+    for model in AI_MODELS:
+        data = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": "Sen PUBG Mobile ekspertisan. Foydalanuvchilarga o'zbek tilida qisqa va aniq maslahat berasan. Boting nomi 'sdzABU AI'. Javoblarni 500 belgidan oshirma."},
+                {"role": "user", "content": prompt}
+            ],
+            "max_tokens": 500
+        }
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, headers=headers, json=data) as resp:
+                    if resp.status == 200:
+                        res_json = await resp.json()
+                        return res_json["choices"][0]["message"]["content"]
+                    else:
+                        logger.warning(f"AI model {model} failed: {resp.status}")
+                        continue
+        except Exception as e:
+            logger.error(f"AI error ({model}): {e}")
+            continue
+            
+    return "😔 Hozirda AI xizmati yuklanmoqda, keyinroq urinib ko'ring."
 
 @router.message(Command("ai"))
 async def cmd_ai(msg: Message, **_):
@@ -944,7 +985,10 @@ async def cmd_ai(msg: Message, **_):
         return
     wait_msg = await msg.answer("⏳ <i>O'ylayapman...</i>", parse_mode="HTML")
     answer = await get_ai_response(text)
-    await wait_msg.edit_text(answer, parse_mode="Markdown")
+    try:
+        await wait_msg.edit_text(f"🤖 <b>sdzABU AI:</b>\n\n{answer}", parse_mode="HTML")
+    except Exception:
+        await wait_msg.edit_text(answer)
 
 # ──────────────────────────────────────────────
 # UC POST (har 24 soatda avtomatik)
