@@ -1158,14 +1158,14 @@ async def cmd_set_promo(msg: Message, **_):
 
 @router.message(Command("give"))
 @admin_only
-async def cmd_give_manual(msg: Message, **_):
-    """Admin joriy chatga M ta account beradi: /give 5"""
+async def cmd_give_manual(msg: Message, bot: Bot, **_):
+    """Kanalga M ta account tashlaydi: /give 5"""
     parts = msg.text.split()
     count = 1
     if len(parts) > 1 and parts[1].isdigit():
         count = int(parts[1])
         
-    if count > 50: # prevent spam
+    if count > 50: # spamni oldini olish
         count = 50
         
     given_accs = []
@@ -1173,7 +1173,7 @@ async def cmd_give_manual(msg: Message, **_):
         acc = next_available_account()
         if not acc:
             break
-        mark_given(acc["id"], msg.chat.id)
+        mark_given(acc["id"], 0) # 0 id kanal ramzi sifatida
         given_accs.append(acc)
         
     if not given_accs:
@@ -1182,12 +1182,14 @@ async def cmd_give_manual(msg: Message, **_):
         
     for acc in given_accs:
         try:
-            await msg.answer(f"🎁 <b>GIVEAWAY ACCOUNT</b>! 👇\n\n{account_text(acc)}", parse_mode="HTML")
+            # Endi bu to'g'ridan to'g'ri ASOSIY KANALGA yuboradi, sdzABU ga:
+            await bot.send_message(CHANNEL_ID, f"🎁 <b>GIVEAWAY ACCOUNT</b>! 👇\n\n{account_text(acc)}", parse_mode="HTML")
             await asyncio.sleep(0.3)
-        except Exception:
+        except Exception as e:
+            await msg.answer(f"Xatolik yuz berdi: {e}")
             pass
             
-    await msg.reply(f"✅ Shu chatga jami {len(given_accs)} ta akkaunt tashlandi!")
+    await msg.reply(f"✅ Bosh kanalga ({CHANNEL_ID}) jami {len(given_accs)} ta akkaunt tashlandi!")
 
 @router.message(Command("topreferrals"))
 @admin_only
