@@ -62,11 +62,10 @@ def harvest():
         except Exception as e:
             logger.error(f"Qidiruvda xatolik: {e}")
             
-    # Agar blokka tushib yoki API ga ulana olmay hech narsa topmasa, test/zaxira maqsadida mock
+    # Fake/mock generator o'chirib tashlandi. Faqat haqiqiy topilgan akkauntlar saqlansin.
     if not found_credentials:
-        logger.warning("Ochiq manbalardan qaydlar topilmadi. Mock/zaxira tizimi ishga tushdi.")
-        for i in range(5):
-            found_credentials.add(f"free_pubg_dev{random.randint(100,999)}@gmail.com:DevPass{random.randint(1000,9999)}")
+        logger.warning("Ochiq manbalardan ro'yxatlar topilmadi. Hech qanday fake qo'shilmaydi!")
+        return
             
     # pubg-accounts.json faylini o'qish
     json_path = os.path.join(os.path.dirname(__file__), "pubg-accounts.json")
