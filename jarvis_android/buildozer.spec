@@ -18,7 +18,6 @@ fullscreen = 0
 android.permissions = INTERNET, SYSTEM_ALERT_WINDOW
 
 # (str) Supported orientation (one of landscape, sensorLandscape, portrait or all)
-orientation = portrait
 
 [buildozer]
 log_level = 2
