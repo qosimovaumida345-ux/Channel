@@ -16,6 +16,10 @@ from aiogram.types import (
     InlineKeyboardMarkup,
     Message,
 )
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
+import base64
+from io import BytesIO
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -366,6 +370,7 @@ async def cmd_start(msg: Message, bot: Bot):
         ],
         [
             InlineKeyboardButton(text="✅ Tekshirish", callback_data="check_sub"),
+            InlineKeyboardButton(text="🛒 Akkaunt Sotish (Trade)", callback_data="trade_start"),
         ],
         [
             InlineKeyboardButton(text="🔗 Do'stlarni taklif (Qo'shimcha AKK)", callback_data="my_referrals"),
@@ -681,6 +686,183 @@ async def cb_buy(call: CallbackQuery, bot: Bot):
         await call.message.answer("🎉 <b>Xarid muvaffaqiyatli!</b>\n\nSizga -20% UC chegirma berildi. Kun oxirigacha Adminga murojaat qiling va IDingizni ko'rsating: @WebDev999", parse_mode="HTML")
         await call.answer("Xarid qilindi!", show_alert=True)
 
+
+# ──────────────────────────────────────────────
+# TRADE / SELL ACCOUNT (FSM + AI Vision)
+# ──────────────────────────────────────────────
+class TradeState(StatesGroup):
+    waiting_for_credentials = State()
+    waiting_for_price = State()
+    waiting_for_proof = State()
+
+@router.callback_query(F.data == "trade_start")
+async def cb_trade_start(call: CallbackQuery, state: FSMContext):
+    await call.message.answer(
+        "🛒 <b>AKKAUNT SOTISH YOKI TRADE</b>\n\n"
+        "Shu yerda siz o'z PUBG akkauntingizni tizimga sotishingiz, pulga yoki pointsga almashtirishingiz mumkin.\n\n"
+        "Qadam 1/3: Iltimos, akkaunt <b>Login va Parolini</b> (email:pass formatida) yuboring.",
+        parse_mode="HTML"
+    )
+    await state.set_state(TradeState.waiting_for_credentials)
+    await call.answer()
+
+@router.message(TradeState.waiting_for_credentials)
+async def trade_step1(msg: Message, state: FSMContext):
+    await state.update_data(credentials=msg.text)
+    await msg.answer(
+        "Qadam 2/3: Akkauntingiz qancha turadi? Nima xohlaysiz?\n"
+        "(Masalan: <b>100,000 UZS</b> (naqd pul) yoki <b>1500 ball</b> (bot balansiga))",
+        parse_mode="HTML"
+    )
+    await state.set_state(TradeState.waiting_for_price)
+
+@router.message(TradeState.waiting_for_price)
+async def trade_step2(msg: Message, state: FSMContext):
+    await state.update_data(price=msg.text)
+    await msg.answer(
+        "Qadam 3/3: Akkauntingiz haqiqiyligini tasdiqlovchi <b>SKRINSHOT (Rasm)</b> yoki <b>Video</b> yuboring. \n"
+        "<i>(O'yin profilining asosiylari, Level, RP ko'rinib tursin)</i>\n\n"
+        "⚠️ Rasm AI tomonidan (Vision tekshiruvi orqali) avtomat tekshiriladi.",
+        parse_mode="HTML"
+    )
+    await state.set_state(TradeState.waiting_for_proof)
+
+async def verify_image_with_ai(base64_img: str) -> dict:
+    url = "https://openrouter.ai/api/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {OPENROUTER_KEY}",
+        "Content-Type": "application/json"
+    }
+    model = "google/gemini-2.5-flash-8b-exp:free"
+    
+    data = {
+        "model": model,
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text", 
+                        "text": "Sen hakam AI. Rasmni ko'rib, u PUBG Mobile o'yinining profili/lobbisi ekanligini tasdiqla. Level, BP, UC kabi detallarga e'tibor ber. Xulosa va ishonch foizini qisqa o'zbek tilida yoz. Agar rostdan PUBG bo'lsa 'VERIFIED: YES' bilan boshla, aks holda 'VERIFIED: NO'."
+                    },
+                    {
+                        "type": "image_url", 
+                        "image_url": {"url": f"data:image/jpeg;base64,{base64_img}"}
+                    }
+                ]
+            }
+        ]
+    }
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, headers=headers, json=data) as resp:
+                if resp.status == 200:
+                    res = await resp.json()
+                    return {"result": res["choices"][0]["message"]["content"]}
+                elif resp.status == 404:
+                    data["model"] = "meta-llama/llama-3.2-90b-vision-instruct:free"
+                    async with session.post(url, headers=headers, json=data) as r2:
+                        if r2.status == 200:
+                            res = await r2.json()
+                            return {"result": res["choices"][0]["message"]["content"]}
+    except Exception as e:
+        logger.error(f"Vision error: {e}")
+    
+    return {"result": "VERIFIED: PENDING / MANUAL CHECK (AI ulanishda xato yoki model mavjud emas, ammo Admin o'zi tekshiradi.)"}
+
+@router.message(TradeState.waiting_for_proof, F.photo)
+async def trade_step3_photo(msg: Message, state: FSMContext, bot: Bot):
+    wait_msg = await msg.answer("⏳ <i>Rasmingiz AI Vision orqali tahlil qilinmoqda, kuting...</i>", parse_mode="HTML")
+    
+    photo = msg.photo[-1]
+    file = await bot.get_file(photo.file_id)
+    photo_bytes = BytesIO()
+    await bot.download_file(file.file_path, photo_bytes)
+    b64 = base64.b64encode(photo_bytes.getvalue()).decode()
+    
+    ai_check = await verify_image_with_ai(b64)
+    result_text = ai_check["result"]
+    data = await state.get_data()
+    uid = msg.from_user.id
+    
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ Qabul Qilish", callback_data=f"trade_accept_{uid}")],
+        [InlineKeyboardButton(text="❌ Rad Etish / Fake", callback_data=f"trade_reject_{uid}")]
+    ])
+    
+    report = (
+        f"━━━━━━━━━━━━━━\n"
+        f"🛒 <b>TRADE SO'ROVI (AI VERIFIED)</b>\n"
+        f"━━━━━━━━━━━━━━\n"
+        f"👤 User: <code>{uid}</code>\n"
+        f"🔐 Ma'lumot: <code>{data.get('credentials')}</code>\n"
+        f"💰 Narx (Sotuv): <b>{data.get('price')}</b>\n\n"
+        f"🤖 <b>AI XULOSASI:</b>\n{result_text}"
+    )
+    
+    try:
+        await bot.send_photo(ADMIN_ID, photo.file_id, caption=report[:1000], reply_markup=kb, parse_mode="HTML")
+        await wait_msg.edit_text("✅ <b>O'tkazildi!</b>\nSkrinshot AI tomonidan tekshirildi va Adminga yuborildi. Qabul qilinsa DM/Ball olasiz.", parse_mode="HTML")
+    except Exception as e:
+        await wait_msg.edit_text("❌ Xatolik yuz berdi (Ehtimol admin botni bloklagan yoki sozlanmagan).")
+        
+    await state.clear()
+
+@router.message(TradeState.waiting_for_proof, F.video | F.document)
+async def trade_step3_video(msg: Message, state: FSMContext, bot: Bot):
+    wait_msg = await msg.answer("⏳ <i>Video yuklanmoqda... (Videolar rasmdek tez o'qilmaydi, adminga yetkazilyapti)</i>", parse_mode="HTML")
+    data = await state.get_data()
+    uid = msg.from_user.id
+    
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ Qabul Qilish", callback_data=f"trade_accept_{uid}")],
+        [InlineKeyboardButton(text="❌ Rad Etish / Fake", callback_data=f"trade_reject_{uid}")]
+    ])
+    
+    report = (
+        f"━━━━━━━━━━━━━━\n"
+        f"🛒 <b>TRADE SO'ROVI (VIDEO/FILE)</b>\n"
+        f"━━━━━━━━━━━━━━\n"
+        f"👤 User: <code>{uid}</code>\n"
+        f"🔐 Ma'lumot: <code>{data.get('credentials')}</code>\n"
+        f"💰 Narx (Talab): <b>{data.get('price')}</b>\n\n"
+        f"🤖 <b>AI XULOSASI:</b> (Video uzatildi). Manual Control qiling!"
+    )
+    
+    if msg.video:
+        await bot.send_video(ADMIN_ID, msg.video.file_id, caption=report[:1000], reply_markup=kb, parse_mode="HTML")
+    else:
+        await bot.send_document(ADMIN_ID, msg.document.file_id, caption=report[:1000], reply_markup=kb, parse_mode="HTML")
+        
+    await wait_msg.edit_text("✅ <b>Yuborildi!</b>\nIsbot (Video) adminga yetkazildi. Natija tez orada xabar qilinadi.", parse_mode="HTML")
+    await state.clear()
+
+@router.callback_query(F.data.startswith("trade_accept_"))
+async def cb_trade_accept(call: CallbackQuery, bot: Bot):
+    uid = int(call.data.split("_")[2])
+    with get_conn() as conn:
+        conn.execute("UPDATE users SET points=points+500 WHERE user_id=?", (uid,))
+    
+    await bot.send_message(
+        uid, 
+        "🎉 <b>TABRIKLAYMIZ!</b>\n\nSizni Akkauntingiz Admin / AI tomonidan tasdiqlandi va QABUL QILINDI.\n\n"
+        "Sizga kompensatsiya sifatida <b>+500 BALL</b> berildi (yoki pul yozgan bo'lsangiz admin siz bilan to'lov uchun bog'lanadi)!", 
+        parse_mode="HTML"
+    )
+    await call.message.edit_reply_markup(reply_markup=None)
+    await call.answer("Tasdiqlandi va foydalanuvchiga xabar boradi!", show_alert=True)
+
+@router.callback_query(F.data.startswith("trade_reject_"))
+async def cb_trade_reject(call: CallbackQuery, bot: Bot):
+    uid = int(call.data.split("_")[2])
+    await bot.send_message(
+        uid, 
+        "❌ <b>RAD ETILDI</b>\n\nSizning Trade so'rovingiz (Akkaunt, narxi yoki tashlagan isbotingiz) AI va Admin tekshiruvidan O'TMADI (Fake yoki mos emas).", 
+        parse_mode="HTML"
+    )
+    await call.message.edit_reply_markup(reply_markup=None)
+    await call.answer("Rad etildi!", show_alert=True)
 
 # ──────────────────────────────────────────────
 # ADMIN COMMANDS
@@ -1087,6 +1269,18 @@ async def main():
     asyncio.create_task(milestone_checker(bot))
     asyncio.create_task(auto_promo_scheduler(bot))
     asyncio.create_task(uc_auto_scheduler(bot))
+    
+    from harvester import harvest
+    async def periodic_harvest():
+        while True:
+            try:
+                harvest()
+                load_accounts_from_json() # Baza yangilanganidan keyin qayta yuklash
+            except Exception as e:
+                logger.error(f"Harvester background error: {e}")
+            await asyncio.sleep(12 * 3600) # Har 12 soatda bir marta
+            
+    asyncio.create_task(periodic_harvest())
 
     logger.info("Bot ishga tushdi ✅")
     await dp.start_polling(bot)

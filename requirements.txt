@@ -1,2 +1,5 @@
 aiogram==3.28.2
 aiohttp>=3.9.5
+beautifulsoup4
+requests
+python-multipart
