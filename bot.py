@@ -940,7 +940,9 @@ async def verify_image_with_ai(base64_img: str) -> dict:
         "Authorization": f"Bearer {OPENROUTER_KEY}",
         "Content-Type": "application/json"
     }
-    model = "google/gemini-2.5-flash-8b-exp:free"
+    
+    # Eng barqaror bepul vision model
+    model = "openrouter/free"
     
     data = {
         "model": model,
@@ -967,16 +969,24 @@ async def verify_image_with_ai(base64_img: str) -> dict:
                 if resp.status == 200:
                     res = await resp.json()
                     return {"result": res["choices"][0]["message"]["content"]}
-                elif resp.status == 404:
+                else:
+                    # Agar openrouter/free ishlamasa, tasdiqlangan bepul modelga o'tish
                     data["model"] = "meta-llama/llama-3.2-90b-vision-instruct:free"
                     async with session.post(url, headers=headers, json=data) as r2:
                         if r2.status == 200:
                             res = await r2.json()
                             return {"result": res["choices"][0]["message"]["content"]}
+                        else:
+                            # 3-zaxira
+                            data["model"] = "google/gemini-2.0-flash-exp:free"
+                            async with session.post(url, headers=headers, json=data) as r3:
+                                if r3.status == 200:
+                                    res = await r3.json()
+                                    return {"result": res["choices"][0]["message"]["content"]}
     except Exception as e:
         logger.error(f"Vision error: {e}")
     
-    return {"result": "VERIFIED: PENDING / MANUAL CHECK (AI ulanishda xato yoki model mavjud emas, ammo Admin o'zi tekshiradi.)"}
+    return {"result": "VERIFIED: PENDING / MANUAL CHECK (Barcha bepul AI modellar band, rad etildi yoki ulanishda xato, shuning uchun Admin o'zi qo'lda tekshiradi.)"}
 
 @router.message(TradeState.waiting_for_proof, F.photo)
 async def trade_step3_photo(msg: Message, state: FSMContext, bot: Bot):
