@@ -1346,10 +1346,9 @@ async def send_promo(bot: Bot):
 # AI INTEGRATION (OpenRouter)
 # ──────────────────────────────────────────────
 AI_MODELS = [
-    "openai/gpt-oss-20b:free",
-    "meta-llama/llama-3.3-70b-instruct:free",
-    "deepseek/deepseek-v4-flash:free",
-    "google/gemma-4-26b-a4b-it:free",
+    "openrouter/free",
+    "google/gemini-2.0-flash-lite-preview-02-05:free",
+    "meta-llama/llama-3.2-3b-instruct:free",
 ]
 
 async def get_ai_response(prompt: str) -> str:
