@@ -451,7 +451,7 @@ async def cb_main_menu(call: CallbackQuery):
 async def cb_jarvis_menu(call: CallbackQuery):
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="💻 Windows uchun yuklash (.exe)", url="https://github.com/qosimovaumida345-ux/Channel/releases/latest/download/JarvisAI.exe")],
-        [InlineKeyboardButton(text="📱 Android (Tez kunda)", callback_data="jarvis_android_soon")],
+        [InlineKeyboardButton(text="📱 Android uchun yuklash (.apk)", url="https://github.com/qosimovaumida345-ux/Channel/releases/latest")],
         [InlineKeyboardButton(text="🔙 Orqaga", callback_data="main_menu")],
     ])
     await call.message.answer(
@@ -470,8 +470,11 @@ async def cb_jarvis_menu(call: CallbackQuery):
         "🖥 <b>O'rnatish (Windows):</b>\n"
         "1. Pastdagi tugmadan yuklang\n"
         "2. Ishga tushiring\n"
-        "3. Ekran tepasida 'J' logosi paydo bo'ladi\n"
-        "4. Kompyuter qayta yonsa ham o'zi ishlaydi\n"
+        "3. Ekran tepasida 'J' logosi paydo bo'ladi\n\n"
+        "📱 <b>O'rnatish (Android):</b>\n"
+        "1. APK faylni yuklab oling\n"
+        "2. Boshqa ilovalar ustidan chiqish (Overlay) ruxsatini bering\n"
+        "3. Ekranda kichik logo paydo bo'ladi\n"
         "━━━━━━━━━━━━━━━━━━━━━",
         reply_markup=kb,
         parse_mode="HTML"
