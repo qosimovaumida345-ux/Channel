@@ -7,17 +7,17 @@ source.dir = .
 source.include_exts = py,png,jpg,kv,atlas
 version = 1.0
 
-requirements = python3==3.11.8,hostpython3==3.11.8,kivy==2.3.0
+requirements = python3,kivy
 
 orientation = portrait
-
-osx.python_version = 3
-osx.kivy_version = 1.9.1
-
 fullscreen = 0
-android.permissions = INTERNET, SYSTEM_ALERT_WINDOW
 
-# (str) Supported orientation (one of landscape, sensorLandscape, portrait or all)
+android.permissions = INTERNET, SYSTEM_ALERT_WINDOW
+android.api = 33
+android.minapi = 21
+android.ndk_api = 21
+android.accept_sdk_license = True
+android.arch = arm64-v8a
 
 [buildozer]
 log_level = 2

@@ -60,37 +60,29 @@ jobs:
           files: dist/JarvisAI.exe
 
   build-android-apk:
-    name: "Build Android APK (Proto)"
-    runs-on: ubuntu-22.04
+    name: "Build Android APK"
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - name: Build with Buildozer (Docker)
+        uses: ArtemSBulgakov/buildozer-action@v1
+        id: buildozer
         with:
-          python-version: '3.11'
-
-      - name: Install Build Dependencies
-        run: |
-          sudo apt update
-          sudo apt install -y git zip unzip openjdk-17-jdk python3-pip autoconf libtool libtool-bin automake m4 pkg-config zlib1g-dev libncurses-dev cmake libffi-dev libssl-dev
-          pip install --upgrade buildozer "cython<3.0.0" virtualenv
-
-      - name: Build with Buildozer
-        run: |
-          cd jarvis_android
-          yes | buildozer android debug
+          command: buildozer android debug
+          workdir: jarvis_android
+          buildozer_version: stable
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: JarvisAI-Android
-          path: jarvis_android/bin/*.apk
+          path: ${{ steps.buildozer.outputs.filename }}
 
       - name: Add to Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: "jarvis-v1.${{ github.run_number }}"
-          files: jarvis_android/bin/*.apk
+          files: ${{ steps.buildozer.outputs.filename }}
