@@ -420,6 +420,9 @@ async def cb_main_menu(call: CallbackQuery):
             InlineKeyboardButton(text="📜 Buyruqlar", callback_data="menu_commands"),
         ],
         [
+            InlineKeyboardButton(text="🧠 JARVIS AI", callback_data="jarvis_menu"),
+        ],
+        [
             InlineKeyboardButton(text="🔙 Orqaga", callback_data="go_back_start"),
         ],
     ])
@@ -437,11 +440,47 @@ async def cb_main_menu(call: CallbackQuery):
         "🔗 <b>Taklif</b> — Do'stlarni taklif qiling\n"
         "🪙 <b>UC</b> — UC narxlari va xarid\n"
         "🤖 <b>AI</b> — PUBG bo'yicha maslahat\n"
+        "🧠 <b>JARVIS</b> — Ovozli AI yordamchi\n"
         "━━━━━━━━━━━━━━━━━━━━━",
         reply_markup=kb,
         parse_mode="HTML"
     )
     await call.answer()
+
+@router.callback_query(F.data == "jarvis_menu")
+async def cb_jarvis_menu(call: CallbackQuery):
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="💻 Windows uchun yuklash (.exe)", url="https://github.com/qosimovaumida345-ux/Channel/releases/latest/download/JarvisAI.exe")],
+        [InlineKeyboardButton(text="📱 Android (Tez kunda)", callback_data="jarvis_android_soon")],
+        [InlineKeyboardButton(text="🔙 Orqaga", callback_data="main_menu")],
+    ])
+    await call.message.answer(
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        "🧠 <b>JARVIS AI — PUBG Voice Assistant</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "Jarvis — bu sizning shaxsiy ovozli AI yordamchingiz!\n\n"
+        "✅ <b>Imkoniyatlari:</b>\n"
+        "🎙 \"Hey Jarvis\" deb chaqiring — u eshitadi\n"
+        "🔫 \"Ot och!\" — PUBG da o't ochadi\n"
+        "🔥 \"Bosib tur!\" — Avtomatik otadi\n"
+        "🛑 \"Toxta!\" — To'xtaydi\n"
+        "🗺 \"Xarita\" — Map ochadi\n"
+        "💊 \"Davolay\" — Heal ishlatadi\n"
+        "🤖 Har qanday savol — AI javob beradi\n\n"
+        "🖥 <b>O'rnatish (Windows):</b>\n"
+        "1. Pastdagi tugmadan yuklang\n"
+        "2. Ishga tushiring\n"
+        "3. Ekran tepasida 'J' logosi paydo bo'ladi\n"
+        "4. Kompyuter qayta yonsa ham o'zi ishlaydi\n"
+        "━━━━━━━━━━━━━━━━━━━━━",
+        reply_markup=kb,
+        parse_mode="HTML"
+    )
+    await call.answer()
+
+@router.callback_query(F.data == "jarvis_android_soon")
+async def cb_jarvis_android(call: CallbackQuery):
+    await call.answer("📱 Android versiyasi tez kunda tayyor bo'ladi!", show_alert=True)
 
 @router.callback_query(F.data == "go_back_start")
 async def cb_go_back(call: CallbackQuery, bot: Bot):

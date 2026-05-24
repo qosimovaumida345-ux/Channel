@@ -1,0 +1,58 @@
+name: Build Jarvis AI
+
+on:
+  push:
+    paths:
+      - "jarvis_client/**"
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows-exe:
+    name: "Build Windows EXE"
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+          pip install -r jarvis_client/requirements.txt
+
+      - name: Build EXE
+        run: |
+          pyinstaller --onefile --noconsole --name JarvisAI jarvis_client/main.py
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: JarvisAI-Windows
+          path: dist/JarvisAI.exe
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "jarvis-v1.${{ github.run_number }}"
+          name: "Jarvis AI v1.${{ github.run_number }}"
+          body: |
+            🤖 **Jarvis AI — PUBG Voice Assistant**
+            Avtomatik build #${{ github.run_number }}
+
+            **O'rnatish:**
+            1. `JarvisAI.exe` ni yuklab oling.
+            2. Ishga tushiring. Ekranning yuqorisida "J" logosi paydo bo'ladi.
+            3. **"Hey Jarvis"** deb chaqiring va buyruq bering!
+
+            **Buyruqlar:** ot och, bosib tur, toxta, reload, crouch, heal, map
+          files: dist/JarvisAI.exe
