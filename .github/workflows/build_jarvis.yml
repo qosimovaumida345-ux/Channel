@@ -4,6 +4,8 @@ on:
   push:
     paths:
       - "jarvis_client/**"
+      - "jarvis_android/**"
+      - ".github/workflows/**"
     branches: [main]
   workflow_dispatch:
 
