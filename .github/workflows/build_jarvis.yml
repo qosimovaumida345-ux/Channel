@@ -81,7 +81,7 @@ jobs:
       - name: Build with Buildozer
         run: |
           cd jarvis_android
-          buildozer android debug
+          yes | buildozer android debug
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
