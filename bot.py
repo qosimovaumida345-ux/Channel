@@ -370,15 +370,9 @@ async def cmd_start(msg: Message, bot: Bot):
         ],
         [
             InlineKeyboardButton(text="✅ Tekshirish", callback_data="check_sub"),
-            InlineKeyboardButton(text="🛒 Akkaunt Sotish (Trade)", callback_data="trade_start"),
         ],
         [
-            InlineKeyboardButton(text="🔗 Do'stlarni taklif (Qo'shimcha AKK)", callback_data="my_referrals"),
-            InlineKeyboardButton(text="👤 Profilim", callback_data="my_profile"),
-        ],
-        [
-            InlineKeyboardButton(text="🪙 UC Narxlari", callback_data="uc_prices"),
-            InlineKeyboardButton(text="📊 Statistika", callback_data="public_stats"),
+            InlineKeyboardButton(text="📋 MENU", callback_data="main_menu"),
         ],
     ])
     await msg.answer(
@@ -389,12 +383,7 @@ async def cmd_start(msg: Message, bot: Bot):
         f"1️⃣ Kanalga obuna bo'l\n"
         f"2️⃣ «✅ Tekshirish» tugmasini bos\n"
         f"3️⃣ Accountni ol va o'yna!\n\n"
-        f"🌟 <b>Qo'shimcha:</b>\n"
-        f"🎁 /daily — Kunlik bonus ball\n"
-        f"🎰 /spin — Omad g'ildiragi\n"
-        f"🛒 /shop — Ballar do'koni\n"
-        f"🏆 /leaderboard — Top reyting\n"
-        f"🤖 /ai savol — AI bilan suhbat\n\n"
+        f"📋 Barcha funksiyalar uchun «MENU» tugmasini bosing!\n\n"
         f"📦 Jami accountlar: <b>{total:,}</b>\n"
         f"✅ Hali mavjud: <b>{available:,}</b>\n\n"
         f"📢 Kanal: {CHANNEL_ID}\n"
@@ -403,6 +392,224 @@ async def cmd_start(msg: Message, bot: Bot):
         reply_markup=kb,
         parse_mode="HTML",
     )
+
+@router.callback_query(F.data == "main_menu")
+async def cb_main_menu(call: CallbackQuery):
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="🛒 Akkaunt Sotish (Trade)", callback_data="trade_start"),
+        ],
+        [
+            InlineKeyboardButton(text="🎁 Kunlik Bonus", callback_data="menu_daily"),
+            InlineKeyboardButton(text="🎰 Omad G'ildiragi", callback_data="menu_spin"),
+        ],
+        [
+            InlineKeyboardButton(text="🛍 Ballar Do'koni", callback_data="menu_shop"),
+            InlineKeyboardButton(text="🏆 Top Reyting", callback_data="menu_leaderboard"),
+        ],
+        [
+            InlineKeyboardButton(text="👤 Profilim", callback_data="my_profile"),
+            InlineKeyboardButton(text="🔗 Do'stlarni Taklif", callback_data="my_referrals"),
+        ],
+        [
+            InlineKeyboardButton(text="🪙 UC Narxlari", callback_data="uc_prices"),
+            InlineKeyboardButton(text="📊 Statistika", callback_data="public_stats"),
+        ],
+        [
+            InlineKeyboardButton(text="🤖 AI Maslahatchi", callback_data="menu_ai"),
+            InlineKeyboardButton(text="📜 Buyruqlar", callback_data="menu_commands"),
+        ],
+        [
+            InlineKeyboardButton(text="🔙 Orqaga", callback_data="go_back_start"),
+        ],
+    ])
+    await call.message.edit_text(
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        "📋 <b>ASOSIY MENU</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "Quyidagi tugmalardan birini tanlang:\n\n"
+        "🛒 <b>Akkaunt Sotish</b> — O'z akkingizni pulga/ballga soting\n"
+        "🎁 <b>Kunlik Bonus</b> — Har kuni ball yig'ing\n"
+        "🎰 <b>Omad G'ildiragi</b> — Akkaunt yoki ball yutib oling\n"
+        "🛍 <b>Do'kon</b> — Ballaringizni sarflang\n"
+        "🏆 <b>Top Reyting</b> — Eng ko'p ball yig'ganlar\n"
+        "👤 <b>Profil</b> — Balansingiz va streak\n"
+        "🔗 <b>Taklif</b> — Do'stlarni taklif qiling\n"
+        "🪙 <b>UC</b> — UC narxlari va xarid\n"
+        "🤖 <b>AI</b> — PUBG bo'yicha maslahat\n"
+        "━━━━━━━━━━━━━━━━━━━━━",
+        reply_markup=kb,
+        parse_mode="HTML"
+    )
+    await call.answer()
+
+@router.callback_query(F.data == "go_back_start")
+async def cb_go_back(call: CallbackQuery, bot: Bot):
+    total, available, _ = stats()
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="📢 Kanalga obuna bo'lish", url=f"https://t.me/{CHANNEL_ID.lstrip('@')}"),
+        ],
+        [
+            InlineKeyboardButton(text="✅ Tekshirish", callback_data="check_sub"),
+        ],
+        [
+            InlineKeyboardButton(text="📋 MENU", callback_data="main_menu"),
+        ],
+    ])
+    await call.message.edit_text(
+        f"━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🎮 <b>PUBG Account Giveaway Bot</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"🎁 Bepul PUBG account olish uchun:\n\n"
+        f"1️⃣ Kanalga obuna bo'l\n"
+        f"2️⃣ «✅ Tekshirish» tugmasini bos\n"
+        f"3️⃣ Accountni ol va o'yna!\n\n"
+        f"📋 Barcha funksiyalar uchun «MENU» tugmasini bosing!\n\n"
+        f"📦 Jami accountlar: <b>{total:,}</b>\n"
+        f"✅ Hali mavjud: <b>{available:,}</b>\n\n"
+        f"📢 Kanal: {CHANNEL_ID}\n"
+        f"📺 YouTube: youtube.com/@sdzABU\n"
+        f"━━━━━━━━━━━━━━━━━━━━━",
+        reply_markup=kb,
+        parse_mode="HTML"
+    )
+    await call.answer()
+
+@router.callback_query(F.data == "menu_daily")
+async def cb_menu_daily(call: CallbackQuery):
+    user_id = call.from_user.id
+    user = get_user(user_id)
+    if not user: create_user(user_id); user = get_user(user_id)
+    can_claim, new_streak = check_daily(user_id)
+    if not can_claim:
+        await call.message.answer("❌ Siz bugungi bonusni oldingiz!\n⏳ Ertaga yana urinib ko'ring.")
+        await call.answer()
+        return
+    points_won = 10 + (new_streak * 2)
+    claim_daily(user_id, new_streak, points_won)
+    await call.message.answer(
+        f"🎉 <b>Kunlik bonus olindi!</b>\n\n"
+        f"💰 Mukofot: <b>+{points_won} ball</b>\n"
+        f"🔥 Ketma-ketlik: <b>{new_streak} kun</b>\n\n"
+        f"<i>Ertaga ham kiring va ko'proq ball oling!</i>",
+        parse_mode="HTML"
+    )
+    await call.answer()
+
+@router.callback_query(F.data == "menu_spin")
+async def cb_menu_spin(call: CallbackQuery, bot: Bot):
+    user_id = call.from_user.id
+    user = get_user(user_id)
+    if not user: create_user(user_id); user = get_user(user_id)
+    now = datetime.now()
+    if user and user["lucky_spin_at"]:
+        last_s = datetime.fromisoformat(user["lucky_spin_at"])
+        if now < last_s + timedelta(hours=12):
+            diff = (last_s + timedelta(hours=12)) - now
+            h, rem = divmod(diff.seconds, 3600)
+            m, _ = divmod(rem, 60)
+            await call.message.answer(f"⏳ Siz aylantirgansiz! Keyingi urinish: <b>{h} soat {m} min</b> dan so'ng.", parse_mode="HTML")
+            await call.answer()
+            return
+    with get_conn() as conn:
+        conn.execute("UPDATE users SET lucky_spin_at=? WHERE user_id=?", (now.isoformat(), user_id))
+    wait_msg = await call.message.answer("🎰 <i>G'ildirak aylanmoqda...</i>", parse_mode="HTML")
+    await asyncio.sleep(1)
+    chance = random.random()
+    if chance < 0.05:
+        acc = next_available_account()
+        if acc:
+            mark_given(acc["id"], user_id)
+            await wait_msg.edit_text(f"🎉 <b>JACKPOT! AKKAUNT YUTDINGIZ!</b>\n\n{account_text(acc)}", parse_mode="HTML")
+        else:
+            with get_conn() as conn: conn.execute("UPDATE users SET points=points+500 WHERE user_id=?", (user_id,))
+            await wait_msg.edit_text("🎰 Akkauntlar qolmagan, kompensatsiya: <b>+500 ball!</b>", parse_mode="HTML")
+    elif chance < 0.40:
+        pts = random.choice([10, 20, 50, 100])
+        with get_conn() as conn: conn.execute("UPDATE users SET points=points+? WHERE user_id=?", (pts, user_id))
+        await wait_msg.edit_text(f"🎁 Tabriklaymiz, siz <b>{pts} ball</b> yutib oldingiz!", parse_mode="HTML")
+    else:
+        await wait_msg.edit_text("😔 Afsuski yutmadingiz. 12 soatdan keyin yana urining!", parse_mode="HTML")
+    await call.answer()
+
+@router.callback_query(F.data == "menu_shop")
+async def cb_menu_shop(call: CallbackQuery):
+    user_id = call.from_user.id
+    user = get_user(user_id)
+    if not user: create_user(user_id); user = get_user(user_id)
+    pts = user['points'] if user and 'points' in user.keys() else 0
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🎁 Random Akkaunt (1500 ball)", callback_data="buy_account_1500")],
+        [InlineKeyboardButton(text="💎 UC Skidka -20% (5000 ball)", callback_data="buy_uc_5000")],
+        [InlineKeyboardButton(text="🔙 Orqaga", callback_data="main_menu")],
+    ])
+    await call.message.answer(
+        f"━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🛒 <b>BALLAR DO'KONI</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"💰 Sizning balingiz: <b>{pts} ball</b>\n\n"
+        f"Pastdagi tovarlardan xarid qilishingiz mumkin:",
+        reply_markup=kb,
+        parse_mode="HTML"
+    )
+    await call.answer()
+
+@router.callback_query(F.data == "menu_leaderboard")
+async def cb_menu_leaderboard(call: CallbackQuery):
+    with get_conn() as conn:
+        rows = conn.execute("SELECT user_id, points FROM users WHERE points > 0 ORDER BY points DESC LIMIT 10").fetchall()
+    if not rows:
+        await call.message.answer("📊 Reyting hozircha bo'sh.")
+        await call.answer()
+        return
+    text = "━━━━━━━━━━━━━━━━━━━━━\n🏆 <b>TOP 10 BALL YIG'GANLAR</b>\n━━━━━━━━━━━━━━━━━━━━━\n\n"
+    medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"]
+    for i, row in enumerate(rows):
+        text += f"{medals[i]} <code>{row['user_id']}</code> — <b>{row['points']} ball</b>\n"
+    text += "\n<i>O'z o'rningizni ko'tarish uchun Kunlik Bonus va Spin qiling!</i>\n━━━━━━━━━━━━━━━━━━━━━"
+    await call.message.answer(text, parse_mode="HTML")
+    await call.answer()
+
+@router.callback_query(F.data == "menu_ai")
+async def cb_menu_ai(call: CallbackQuery):
+    await call.message.answer(
+        "🤖 <b>sdzABU AI Maslahatchi</b>\n\n"
+        "Menga PUBG haqida savol bering! Masalan:\n\n"
+        "<code>/ai M416 uchun qaysi nishon yaxshi?</code>\n"
+        "<code>/ai Crown ga qanday chiqish mumkin?</code>\n"
+        "<code>/ai Sensitivity sozlamalari</code>\n\n"
+        "<i>Shunchaki /ai va savolni yozing!</i>",
+        parse_mode="HTML"
+    )
+    await call.answer()
+
+@router.callback_query(F.data == "menu_commands")
+async def cb_menu_commands(call: CallbackQuery):
+    await call.message.answer(
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        "📜 <b>BOT BUYRUQLARI</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "🎮 <b>Asosiy:</b>\n"
+        "/start — Botni ishga tushirish\n"
+        "/daily — Kunlik bonus ball olish\n"
+        "/spin — Omad g'ildiragi (12 soatda 1x)\n"
+        "/shop — Ballar do'koni\n"
+        "/leaderboard — Top reyting\n\n"
+        "🛒 <b>Savdo:</b>\n"
+        "🛒 Akkaunt Sotish — Menu → Trade tugmasi\n\n"
+        "🤖 <b>AI:</b>\n"
+        "/ai savol — AI dan maslahat olish\n\n"
+        "📊 <b>Ma'lumot:</b>\n"
+        "👤 Profilim — Ballar va streak ko'rish\n"
+        "📊 Statistika — Bot statistikasi\n"
+        "💰 UC Narxlar — UC narxlar ro'yxati\n"
+        "👥 Takliflarim — Referral ma'lumotlar\n\n"
+        "<i>Barchasi Menu tugmasidan ham foydalanish mumkin!</i>\n"
+        "━━━━━━━━━━━━━━━━━━━━━",
+        parse_mode="HTML"
+    )
+    await call.answer()
 
 @router.callback_query(F.data == "check_sub")
 async def cb_check_sub(call: CallbackQuery, bot: Bot):
@@ -1002,13 +1209,17 @@ async def cmd_commands(msg: Message, **_):
         "/spin — Omad g'ildiragi (12 soatda 1x)\n"
         "/shop — Ballar do'koni\n"
         "/leaderboard — Top reyting\n\n"
+        "🛒 <b>Savdo (Trade):</b>\n"
+        "🛒 Akkaunt Sotish — Menu → Trade tugmasi\n"
+        "   (AI tekshiruv + Admin tasdiqlash)\n\n"
         "🤖 <b>AI:</b>\n"
         "/ai savol — AI dan maslahat olish\n\n"
         "📊 <b>Ma'lumot:</b>\n"
         "👤 Profilim — Ballar va streak ko'rish\n"
         "📊 Statistika — Bot statistikasi\n"
         "💰 UC Narxlar — UC narxlar ro'yxati\n"
-        "👥 Takliflarim — Referral ma'lumotlar\n"
+        "👥 Takliflarim — Referral ma'lumotlar\n\n"
+        "<i>📋 Barchasi Menu tugmasidan ham ochiq!</i>\n"
         "━━━━━━━━━━━━━━━━━━━━━",
         parse_mode="HTML",
     )
@@ -1035,6 +1246,10 @@ async def cmd_help(msg: Message, **_):
         "/broadcast matn — Barchaga xabar\n"
         "/ban ID — Bloklash\n"
         "/unban ID — Blokdan chiqarish\n\n"
+        "🛒 <b>Trade tizimi:</b>\n"
+        "Foydalanuvchilar Menu → Trade orqali\n"
+        "akkaunt sotadi. AI vision tekshiradi.\n"
+        "Sizga tasdiqlash uchun rasm/video keladi.\n\n"
         "ℹ️ /commands — Barcha buyruqlar\n"
         "━━━━━━━━━━━━━━━━━━━━━",
         parse_mode="HTML",
