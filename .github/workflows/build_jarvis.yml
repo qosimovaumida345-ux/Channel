@@ -34,7 +34,7 @@ jobs:
 
       - name: Build EXE
         run: |
-          pyinstaller --onefile --noconsole --uac-admin --icon=jarvis_client/icon.ico --add-data "jarvis_client/icon.png;." --name JarvisAI jarvis_client/main.py
+          pyinstaller --onefile --noconsole --uac-admin --icon=jarvis_client/icon.ico --add-data "jarvis_client/icon.png;." --add-data "jarvis_client/icon.ico;." --add-data "jarvis_client/config.py;." --add-data "jarvis_client/brain.py;." --add-data "jarvis_client/voice.py;." --add-data "jarvis_client/actions.py;." --hidden-import=edge_tts --hidden-import=customtkinter --hidden-import=pygame --hidden-import=requests --hidden-import=PIL --name JarvisAI jarvis_client/main.py
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
