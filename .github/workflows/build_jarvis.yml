@@ -34,7 +34,7 @@ jobs:
 
       - name: Build EXE
         run: |
-          pyinstaller --onefile --noconsole --name JarvisAI jarvis_client/main.py
+          pyinstaller --onefile --noconsole --uac-admin --icon=jarvis_client/icon.ico --add-data "jarvis_client/icon.png;." --name JarvisAI jarvis_client/main.py
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

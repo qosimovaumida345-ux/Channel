@@ -17,7 +17,7 @@ android.api = 33
 android.minapi = 21
 android.ndk_api = 21
 android.accept_sdk_license = True
-android.arch = arm64-v8a
+android.arch = armeabi-v7a, arm64-v8a
 
 # Use develop branch of p4a for Python 3.14 support
 p4a.branch = develop

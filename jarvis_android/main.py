@@ -42,8 +42,24 @@ class JarvisAndroidApp(App):
         return layout
         
     def on_start(self, instance):
-        self.status.text = "Holati: Jarvis Android xizmati tez kunda ishga tushadi!"
-        self.btn_start.text = "Qayta yuklash..."
+        self.status.text = "Ruxsatlar tekshirilmoqda..."
+        self.btn_start.text = "Ulanish boshlandi"
+        
+        try:
+            from android.permissions import request_permissions, Permission
+            def callback(permissions, results):
+                if all(results):
+                    self.status.text = "Holati: Jarvis Audio xizmati faol!\n(Tez orada API integratsiyasi ulanadi...)"
+                else:
+                    self.status.text = "Holati: Ruxsatlar berilmadi! Jarvis ishlolmaydi."
+            
+            request_permissions([
+                Permission.RECORD_AUDIO,
+                Permission.SYSTEM_ALERT_WINDOW,
+                Permission.INTERNET
+            ], callback)
+        except Exception as e:
+            self.status.text = f"Holati: Ruxsat xatosi yoki bu Android emas.\n{str(e)}"
 
 if __name__ == '__main__':
     JarvisAndroidApp().run()

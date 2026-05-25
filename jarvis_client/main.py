@@ -4,9 +4,11 @@ import time
 import asyncio
 import threading
 import queue
-import tkinter as tk
-from tkinter import Canvas, Text, Scrollbar, Frame, Button
 import logging
+import customtkinter as ctk
+import tkinter as tk
+from tkinter import Canvas
+from PIL import Image
 
 from brain import Brain
 from voice import Voice
@@ -14,6 +16,10 @@ from actions import ActionHandler
 
 logging.basicConfig(level=logging.INFO, format="[JARVIS] %(message)s")
 logger = logging.getLogger("JARVIS.Main")
+
+# CustomTkinter setup
+ctk.set_appearance_mode("dark")
+ctk.set_default_color_theme("blue")
 
 class ModernUI:
     STATUS_COLORS = {
@@ -28,56 +34,74 @@ class ModernUI:
     def __init__(self, jarvis_engine):
         self.engine = jarvis_engine
         
-        self.root = tk.Tk()
-        self.root.title("JARVIS AI - Dashboard")
-        self.root.geometry("400x600")
-        self.root.configure(bg="#0a0a0a")
+        self.root = ctk.CTk()
+        self.root.title("JARVIS AI - Neural Core")
+        self.root.geometry("450x650")
         self.root.attributes("-alpha", 0.95)
-        
-        # State
+        # Attempt to set the icon generated for Jarvis
+        try:
+            self.root.iconbitmap("icon.ico")
+        except:
+            pass
+            
         self.is_minimized = False
         self.overlay_win = None
         self.status = "idle"
         
-        # Main Window UI
         self._build_main_ui()
         
     def _build_main_ui(self):
-        # Header
-        header = Frame(self.root, bg="#111", height=50)
+        # Header Frame
+        header = ctk.CTkFrame(self.root, height=60, corner_radius=0, fg_color="#0a0a0d")
         header.pack(fill=tk.X)
+        header.pack_propagate(False)
+
+        # Title
+        title_lbl = ctk.CTkLabel(header, text="🧠 JARVIS SYSTEM", text_color="#00d4ff", font=("Consolas", 18, "bold"))
+        title_lbl.pack(side=tk.LEFT, padx=15, pady=15)
         
-        tk.Label(header, text="🧠 JARVIS AI CORE", fg="#00d4ff", bg="#111", font=("Consolas", 14, "bold")).pack(side=tk.LEFT, padx=10, pady=10)
-        
-        btn_min = Button(header, text="O Overlay", bg="#333", fg="#fff", bd=0, command=self.minimize_to_overlay)
-        btn_min.pack(side=tk.RIGHT, padx=10, pady=10)
+        # Overlay Button
+        btn_min = ctk.CTkButton(header, text="O Mini", width=60, font=("Consolas", 12), text_color="#fff", hover_color="#0055ff", fg_color="#1a1a2e", command=self.minimize_to_overlay)
+        btn_min.pack(side=tk.RIGHT, padx=15, pady=15)
         
         # Chat log
-        self.chat_frame = Frame(self.root, bg="#0a0a0a")
-        self.chat_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        self.chat_frame = ctk.CTkFrame(self.root, fg_color="#121212")
+        self.chat_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
         
-        self.log = Text(self.chat_frame, bg="#141414", fg="#eee", font=("Consolas", 10), bd=0, wrap=tk.WORD)
-        self.log.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.log = ctk.CTkTextbox(self.chat_frame, fg_color="#121212", text_color="#e0e0e0", font=("Consolas", 12), wrap=tk.WORD)
+        self.log.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         
-        scroll = Scrollbar(self.chat_frame, command=self.log.yview)
-        scroll.pack(side=tk.RIGHT, fill=tk.Y)
-        self.log.config(yscrollcommand=scroll.set)
+        # Input Frame (For manual text input)
+        input_frame = ctk.CTkFrame(self.root, height=50, fg_color="#0a0a0d", corner_radius=0)
+        input_frame.pack(fill=tk.X, padx=10, pady=10)
         
+        self.input_entry = ctk.CTkEntry(input_frame, placeholder_text="Enter command to JARVIS...", font=("Consolas", 12), fg_color="#1a1a2e", text_color="#00d4ff", border_color="#00d4ff", border_width=1)
+        self.input_entry.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0,10))
+        self.input_entry.bind("<Return>", self.send_manual_command)
+        
+        btn_send = ctk.CTkButton(input_frame, text="SEND", width=60, font=("Consolas", 12, "bold"), fg_color="#00d4ff", text_color="#000", hover_color="#00aacc", command=self.send_manual_command)
+        btn_send.pack(side=tk.RIGHT)
+
         # Status Bar
-        self.status_lbl = tk.Label(self.root, text="STATUS: IDLE", bg="#0a0a0a", fg=self.STATUS_COLORS["idle"], font=("Consolas", 10, "bold"))
-        self.status_lbl.pack(fill=tk.X, pady=5)
+        self.status_lbl = ctk.CTkLabel(self.root, text="STATUS: IDLE", text_color=self.STATUS_COLORS["idle"], font=("Consolas", 12, "bold"))
+        self.status_lbl.pack(fill=tk.X, pady=(0,5))
         
-        self.add_log("JARVIS faollashtirildi. 0-Delay rejim yoqilgan.", "system")
+        self.add_log("SYSTEM ON. Jarvis kutmoqda...", "system")
+
+    def send_manual_command(self, event=None):
+        cmd = self.input_entry.get().strip()
+        if cmd:
+            self.input_entry.delete(0, tk.END)
+            # Push specifically to the engine queue
+            self.engine.command_queue.put(cmd)
 
     def _build_overlay(self):
-        size = 64
+        size = 70
         self.overlay_win = tk.Toplevel(self.root)
         self.overlay_win.overrideredirect(True)
         self.overlay_win.attributes("-topmost", True)
         self.overlay_win.attributes("-alpha", 0.9)
         self.overlay_win.configure(bg="black")
-        
-        # Try transparent bg on windows
         try:
             self.overlay_win.attributes("-transparentcolor", "black")
         except:
@@ -89,9 +113,9 @@ class ModernUI:
         self.canvas = Canvas(self.overlay_win, width=size, height=size, bg="black", highlightthickness=0)
         self.canvas.pack()
         
-        self.ring = self.canvas.create_oval(4, 4, size-4, size-4, fill="#111", outline=self.STATUS_COLORS[self.status], width=2)
-        self.canvas.create_text(size//2, size//2, text="J", fill="#00d4ff", font=("Consolas", 22, "bold"))
-        self.dot = self.canvas.create_oval(size-18, size-18, size-10, size-10, fill=self.STATUS_COLORS[self.status], outline="")
+        # Cyberpunk glowing ring
+        self.ring = self.canvas.create_oval(4, 4, size-4, size-4, fill="#0a0a0d", outline=self.STATUS_COLORS[self.status], width=3)
+        self.canvas.create_text(size//2, size//2, text="JARVIS", fill="#00d4ff", font=("Consolas", 10, "bold"))
         
         # Drag mechanics & restoring
         self._dx, self._dy = 0, 0
@@ -123,20 +147,20 @@ class ModernUI:
         self.status = st
         color = self.STATUS_COLORS.get(st, "#555")
         try:
-            self.status_lbl.config(text=f"STATUS: {st.upper()}", fg=color)
+            self.status_lbl.configure(text=f"STATUS: {st.upper()}", text_color=color)
             if self.is_minimized and self.overlay_win:
-                self.canvas.itemconfig(self.dot, fill=color)
                 self.canvas.itemconfig(self.ring, outline=color)
         except Exception as e:
             pass
 
     def add_log(self, msg, role="user"):
-        self.log.insert(tk.END, f"[{role.upper()}] {msg}\n\n")
+        tag_color = "#00d4ff" if role == "jarvis" else "#00ff88" if role == "user" else "#555555"
+        self.log.insert(tk.END, f"[{role.upper()}] ", tag_color)
+        self.log.insert(tk.END, f"{msg}\n\n")
         self.log.see(tk.END)
 
     def run(self):
-        # Trigger background threading logic
-        self.root.after(100, self.engine.start_logic)
+        self.root.after(500, self.engine.start_logic)
         self.root.mainloop()
 
 class JarvisEngine:
@@ -151,49 +175,45 @@ class JarvisEngine:
         self.command_queue = queue.Queue()
 
     def start_logic(self):
-        self.voice.speak("Super Jarvis ishga tushdi. O'zbek tilida gapirishingiz mumkin, nol kechikish bilan ulandim.", emotion="excited")
+        # Notify user Jarvis is ready
+        self.ui.add_log("Ovoz va Tizim moslashtirildi", "system")
         
-        # Start async listeners
         t1 = threading.Thread(target=self._constant_listen_loop, daemon=True)
         t2 = threading.Thread(target=self._process_queue_loop, daemon=True)
         t1.start()
         t2.start()
 
     def _constant_listen_loop(self):
-        """Zero-delay continuous listener in background thread."""
         while self.running:
             if not self.active_mode:
                 self.ui.set_status("idle")
                 if self.voice.detect_wake():
                     self.active_mode = True
                     self.ui.set_status("listening")
-                    self.voice.speak("Xizmatdaman!", emotion="excited")
-                    self.ui.add_log("Wake word detected! Listening...", "system")
+                    self.voice.speak("Xizmatga tayyorman, gapiring", emotion="excited")
+                    self.ui.add_log("Uyg'ondi, eshitilmoqda...", "system")
                 continue
             
-            # Active Mode - Super fast Listening
             self.ui.set_status("listening")
             cmd = self.voice.listen(timeout=5, phrase_limit=5)
             
             if cmd:
-                if "tinch" in cmd or "uxla" in cmd or "sleep" in cmd:
+                if "uxla" in cmd or "sleep" in cmd or "tinch" in cmd:
                     self.active_mode = False
-                    self.voice.speak("Yaxshi, jim rejimga o'tdim.", emotion="calm")
-                    self.ui.add_log("Sleep mode activated.", "system")
+                    self.voice.speak("Jim rejimga o'tdim.", emotion="calm")
+                    self.ui.add_log("Kutish (Idle) rejimiga o'tdi", "system")
                 else:
                     self.command_queue.put(cmd)
 
     def _process_queue_loop(self):
-        """Processes commands instantly when passed via queue."""
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         
         while self.running:
             try:
                 cmd = self.command_queue.get(timeout=1)
-                self.ui.add_log(cmd, "Siz")
+                self.ui.add_log(cmd, "user")
                 
-                # Check actions first
                 local_result = self.actions.handle(cmd)
                 if local_result:
                     self.ui.set_status("action")
@@ -201,21 +221,17 @@ class JarvisEngine:
                     self.ui.add_log(local_result, "jarvis")
                     continue
                 
-                # AI Brain
                 self.ui.set_status("thinking")
                 
-                # Run async AI request
-                ai_answer = loop.run_until_complete(self.brain.think(cmd))
+                # Execute standard HTTP requests (through ASYNC wrapper)
+                ai_answer = loop.run_until_complete(self.brain.async_think(cmd))
                 self.ui.add_log(ai_answer, "jarvis")
                 
                 self.ui.set_status("speaking")
                 
-                # Fast speak via thread
                 emotion = "normal"
-                if "!" in ai_answer:
+                if "!" in ai_answer or "xato" in ai_answer:
                     emotion = "excited"
-                elif "xato" in ai_answer or "uzr" in ai_answer:
-                    emotion = "sad"
                     
                 self.voice.speak(ai_answer, emotion=emotion)
                 
